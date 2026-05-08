@@ -10526,5 +10526,253 @@ class TestP35STTNormalization(unittest.TestCase):
         self.assertEqual(act['type'], 'format_cells')
 
 
+# ---------------------------------------------------------------------------
+# P36 — Voice reliability: STT mishear corrections + unsafe slot blocking
+# ---------------------------------------------------------------------------
+
+class TestP36VoiceReliability(unittest.TestCase):
+    """Regression tests for P36 voice-reliability improvements.
+
+    Covers six real runtime failures:
+    1. fear/pure row → fill row  (fill mishear)
+    2. swap by pre-ascending     (hyphenated garble blocked)
+    3. unmerge select C1 D1      (cells keyword recovery)
+    4. some b2b5 into c5         (merged-range sum normalisation)
+    5. sort by V descending      (B mishear → ask clarification)
+    6. sort/filter color B       (color→column disambiguation)
+    """
+
+    # ── 1. fear/pure row → fill row ─────────────────────────────────────────
+
+    def test_01_fear_row_corrects_to_fill_row(self):
+        """'fear row 2 with red' must correct to 'fill row 2 with red'."""
+        corrected = _pipeline('fear row 2 with red')['corrected']
+        self.assertIn('fill row', corrected.lower(),
+                      f"Expected 'fill row' in {corrected!r}")
+
+    def test_02_pure_row_corrects_to_fill_row(self):
+        """'pure row 2 with red' must correct to 'fill row 2 with red'."""
+        corrected = _pipeline('pure row 2 with red')['corrected']
+        self.assertIn('fill row', corrected.lower(),
+                      f"Expected 'fill row' in {corrected!r}")
+
+    def test_03_fear_row_intent_is_format_cells(self):
+        """'fear row 2 with red' must reach format_cells intent."""
+        r = _pipeline('fear row 2 with red')
+        self.assertEqual(r['intent'], 'format_cells',
+                         f"Expected format_cells, got {r['intent']!r}")
+
+    def test_04_pure_row_intent_is_format_cells(self):
+        """'pure row 2 with red' must reach format_cells intent."""
+        r = _pipeline('pure row 2 with red')
+        self.assertEqual(r['intent'], 'format_cells',
+                         f"Expected format_cells, got {r['intent']!r}")
+
+    def test_05_fear_row_no_slot_gap(self):
+        """'fear row 2 with red' must not trigger a slot clarification."""
+        r = _pipeline('fear row 2 with red')
+        self.assertIsNone(r['slot_msg'],
+                          f"Unexpected slot_msg: {r['slot_msg']!r}")
+
+    def test_06_fear_row_not_add_row(self):
+        """'fear row 2 with red' must NOT route to add_row."""
+        r = _pipeline('fear row 2 with red')
+        self.assertNotEqual(r['intent'], 'add_row',
+                            "Incorrectly routed to add_row")
+
+    # ── 2. swap by pre-ascending → blocked ───────────────────────────────────
+
+    def test_07_swap_by_pre_ascending_corrects_to_sort_by(self):
+        """'swap by pre-ascending' must normalise to 'sort by ...'."""
+        corrected = _pipeline('swap by pre-ascending')['corrected']
+        self.assertIn('sort by', corrected.lower(),
+                      f"Expected 'sort by' in {corrected!r}")
+
+    def test_08_swap_by_pre_ascending_blocked_by_slot(self):
+        """'swap by pre-ascending' must be blocked (invalid column PRE)."""
+        r = _pipeline('swap by pre-ascending')
+        self.assertIsNotNone(r['slot_msg'],
+                             "Expected slot clarification for 'pre' column")
+        self.assertIn('column B', r['slot_msg'],
+                      f"Clarification should mention column B: {r['slot_msg']!r}")
+
+    def test_09_swap_by_pre_ascending_no_action(self):
+        """'swap by pre-ascending' must not produce an executable action."""
+        r = _pipeline('swap by pre-ascending')
+        self.assertIsNone(r['action'],
+                          f"Expected no action, got {r['action']!r}")
+
+    # ── 3. unmerge select C1 D1 → unmerge cells C1:D1 ───────────────────────
+
+    def test_10_unmerge_select_corrects_to_cells(self):
+        """'unmerge select C1 D1' must correct 'select' to 'cells'."""
+        corrected = _pipeline('unmerge select C1 D1')['corrected']
+        self.assertIn('unmerge cells', corrected.lower(),
+                      f"Expected 'unmerge cells' in {corrected!r}")
+
+    def test_11_unmerge_select_intent_is_unmerge(self):
+        """'unmerge select C1 D1' must reach unmerge_cells intent."""
+        r = _pipeline('unmerge select C1 D1')
+        self.assertEqual(r['intent'], 'unmerge_cells',
+                         f"Expected unmerge_cells, got {r['intent']!r}")
+
+    def test_12_unmerge_select_not_switch_sheet(self):
+        """'unmerge select C1 D1' must NOT route to switch_sheet."""
+        r = _pipeline('unmerge select C1 D1')
+        self.assertNotEqual(r['intent'], 'switch_sheet',
+                            "Incorrectly routed to switch_sheet")
+
+    def test_13_unmerge_select_no_slot_gap(self):
+        """'unmerge select C1 D1' has both cell refs → no slot clarification."""
+        r = _pipeline('unmerge select C1 D1')
+        self.assertIsNone(r['slot_msg'],
+                          f"Unexpected slot_msg: {r['slot_msg']!r}")
+
+    # ── 4. some b2b5 into c5 → sum B2:B5 into C5 ────────────────────────────
+
+    def test_14_some_b2b5_corrects_to_sum(self):
+        """'some b2b5 into c5' must correct 'some' to 'sum'."""
+        corrected = _pipeline('some b2b5 into c5')['corrected']
+        self.assertIn('sum', corrected.lower(),
+                      f"Expected 'sum' in {corrected!r}")
+        self.assertNotIn('some', corrected.lower(),
+                         f"'some' should be gone: {corrected!r}")
+
+    def test_15_some_b2b5_range_normalised(self):
+        """'some b2b5 into c5' must normalise range to B2:B5 (case-insensitive)."""
+        corrected = _pipeline('some b2b5 into c5')['corrected']
+        self.assertIn('b2:b5', corrected.lower(),
+                      f"Expected 'b2:b5' (colon form) in {corrected!r}")
+
+    def test_16_some_b2b5_intent_is_calculate_sum(self):
+        """'some b2b5 into c5' must reach calculate_sum intent."""
+        r = _pipeline('some b2b5 into c5')
+        self.assertEqual(r['intent'], 'calculate_sum',
+                         f"Expected calculate_sum, got {r['intent']!r}")
+
+    def test_17_some_b2b5_no_slot_gap(self):
+        """'some b2b5 into c5' has valid range + destination → no slot gap."""
+        r = _pipeline('some b2b5 into c5')
+        self.assertIsNone(r['slot_msg'],
+                          f"Unexpected slot_msg: {r['slot_msg']!r}")
+
+    # ── 5. sort by V descending → ask clarification ──────────────────────────
+
+    def test_18_sort_by_V_descending_blocked(self):
+        """'sort by V descending' must return a slot clarification (V=B mishear)."""
+        r = _pipeline('sort by V descending')
+        self.assertIsNotNone(r['slot_msg'],
+                             "Expected clarification for column V (likely B mishear)")
+
+    def test_19_sort_by_V_descending_mentions_B(self):
+        """Clarification for 'sort by V descending' must mention column B."""
+        r = _pipeline('sort by V descending')
+        self.assertIn('column B', r['slot_msg'],
+                      f"Expected 'column B' in slot_msg: {r['slot_msg']!r}")
+
+    def test_20_sort_by_V_descending_no_action(self):
+        """'sort by V descending' must not produce an executable action."""
+        r = _pipeline('sort by V descending')
+        self.assertIsNone(r['action'],
+                          f"Expected no action, got {r['action']!r}")
+
+    # ── 6. color → column disambiguation ────────────────────────────────────
+
+    def test_21_sort_by_color_B_corrects_to_column(self):
+        """'sort by color B ascending' must correct 'color' to 'column'."""
+        corrected = _pipeline('sort by color B ascending')['corrected']
+        self.assertIn('column B', corrected,
+                      f"Expected 'column B' in {corrected!r}")
+
+    def test_22_sort_by_color_B_no_slot_gap(self):
+        """'sort by color B ascending' must not trigger a slot clarification."""
+        r = _pipeline('sort by color B ascending')
+        self.assertIsNone(r['slot_msg'],
+                          f"Unexpected slot_msg: {r['slot_msg']!r}")
+
+    def test_23_sort_by_color_B_action(self):
+        """'sort by color B ascending' must produce a sort_range action on column B."""
+        r = _pipeline('sort by color B ascending')
+        act = r['action']
+        self.assertIsNotNone(act, "Expected sort action")
+        self.assertEqual(act['type'], 'sort_range')
+        self.assertEqual(act['column'], 'B')
+
+    def test_24_filter_color_B_corrects_to_column(self):
+        """'filter color B = 40' must correct 'color' to 'column'."""
+        corrected = _pipeline('filter color B = 40')['corrected']
+        self.assertIn('column B', corrected,
+                      f"Expected 'column B' in {corrected!r}")
+
+    def test_25_filter_color_B_no_slot_gap(self):
+        """'filter color B = 40' must not trigger a slot clarification."""
+        r = _pipeline('filter color B = 40')
+        self.assertIsNone(r['slot_msg'],
+                          f"Unexpected slot_msg: {r['slot_msg']!r}")
+
+    def test_26_color_B2_red_unchanged(self):
+        """'color B2 red' (fill formatting) must NOT have 'color' rewritten."""
+        corrected = _pipeline('color B2 red')['corrected']
+        self.assertIn('color', corrected.lower(),
+                      f"'color' should be preserved: {corrected!r}")
+        self.assertNotIn('column', corrected.lower(),
+                         f"'column' must not appear: {corrected!r}")
+
+    # ── 7. Protected baseline regression checks ──────────────────────────────
+
+    def test_27_sort_by_B_ascending_unchanged(self):
+        """'sort by B ascending' must still work exactly as before."""
+        r = _pipeline('sort by B ascending')
+        self.assertIsNone(r['slot_msg'])
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act['type'], 'sort_range')
+        self.assertEqual(act['column'], 'B')
+        self.assertTrue(act['ascending'])
+
+    def test_28_sort_by_B_descending_unchanged(self):
+        """'sort by B descending' must still work exactly as before."""
+        r = _pipeline('sort by B descending')
+        self.assertIsNone(r['slot_msg'])
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act['type'], 'sort_range')
+        self.assertEqual(act['column'], 'B')
+        self.assertFalse(act['ascending'])
+
+    def test_29_fill_row_2_with_red_unchanged(self):
+        """'fill row 2 with red' must still work exactly as before."""
+        r = _pipeline('fill row 2 with red')
+        self.assertEqual(r['intent'], 'format_cells')
+        self.assertIsNone(r['slot_msg'])
+
+    def test_30_sum_range_into_unchanged(self):
+        """'sum B2:B5 into C5' must still work exactly as before."""
+        r = _pipeline('sum B2:B5 into C5')
+        self.assertEqual(r['intent'], 'calculate_sum')
+        self.assertIsNone(r['slot_msg'])
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act['type'], 'write_sum_formula')
+
+    def test_31_unmerge_cells_A1_C1_unchanged(self):
+        """'unmerge cells A1:C1' must still work exactly as before."""
+        r = _pipeline('unmerge cells A1:C1')
+        self.assertEqual(r['intent'], 'unmerge_cells')
+        self.assertIsNone(r['slot_msg'])
+
+    def test_32_swap_by_be_descending_executes(self):
+        """'swap by be descending' → P35 corrects 'be'→'B' → valid sort command executes."""
+        r = _pipeline('swap by be descending')
+        # P35 correction: "by be descending" → "by B descending" (lowercase 'e' = voice)
+        # Result is a valid sort command; must NOT be blocked by slot check.
+        self.assertIsNone(r['slot_msg'],
+                          f"'sort by B descending' should not be blocked: {r['slot_msg']!r}")
+        act = r['action']
+        self.assertIsNotNone(act, "Expected sort_range action after P35 correction")
+        self.assertEqual(act['type'], 'sort_range')
+        self.assertEqual(act['column'], 'B')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

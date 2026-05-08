@@ -690,6 +690,10 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     # Lookahead requires a cell ref immediately after so "add some values"
     # and "buy some groceries" are untouched.
     (re.compile(r'\bsome\b(?=\s+[A-Za-z]\d+\b)', re.IGNORECASE), 'sum'),
+    # "some b2b5 into c5" — "some" before a merged-range token (two cell refs concatenated
+    # with no space, e.g. "b2b5").  STT drops the colon and merges refs into one token.
+    # Must run BEFORE the range normalization rule so "sum b2b5 into c5" → "sum B2:B5 into C5".
+    (re.compile(r'\bsome\b(?=\s+[A-Za-z]+\d+[A-Za-z]+\d+)', re.IGNORECASE), 'sum'),
 
     # ══ "cell 810" → "cell A10" ═══════════════════════════════════════════
     # STT mishears the letter "A" as the digit "8" in cell references, producing
@@ -828,6 +832,10 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^hand\s+me\s+and\s+(?:merge|much)\b', re.IGNORECASE), 'unmerge'),
     # Bare leading repetitions: consume ALL "and merge/much" groups at once.
     (re.compile(r'^(?:and\s+(?:merge|much)\b\s*)+', re.IGNORECASE), 'unmerge '),
+    # "unmerge select C1 D1" → "unmerge cells C1 D1"
+    # "select" is a phonetic corruption of "cells" in unmerge context (STT artifact).
+    # Must run BEFORE the colon-insertion rule so the resulting "cells" prefix is canonical.
+    (re.compile(r'\bunmerge\s+select\b', re.IGNORECASE), 'unmerge cells'),
     # "unmerge A1C1" / "unmerge cells A1C1" → insert missing colon between cell refs.
     # Mirrors the same fix for merge cells (P36).
     (re.compile(r'\b(unmerge\s+(?:cells?\s+)?)([A-Za-z]+\d+)([A-Za-z]+\d+)\b', re.IGNORECASE),
@@ -906,6 +914,17 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
         re.IGNORECASE,
     ), 'sort by'),
 
+    # ══ "color" → "column" disambiguation in column-operation context ═══════════
+    # STT mishears "column" as "color" in sort/filter/width commands.
+    # "sort by color B ascending" → "sort by column B ascending"
+    # "filter color B = 40"       → "filter column B = 40"
+    # "set color width B 20"      → "set column width B 20"
+    # Tight prefix anchors: only fires when "color" immediately follows a column-operation
+    # keyword, NOT a formatting verb — "color B2 red" (fill command) is UNCHANGED.
+    (re.compile(r'\b(sort\s+by)\s+color\b', re.IGNORECASE), r'\1 column'),
+    (re.compile(r'\b(filter)\s+color\b', re.IGNORECASE), r'\1 column'),
+    (re.compile(r'\b(set)\s+color\s+width\b', re.IGNORECASE), r'\1 column width'),
+
     # ══ Column letter "B" STT mishears ════════════════════════════════════════
     # Whisper mishears the spoken letter "B" as "be" or "bee" (phonetic names).
     # Lambda checks the last character of the captured word: lowercase 'e' means
@@ -941,6 +960,13 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bsam\b(?=\s+(?:[A-Za-z]\d+|column)\b)', re.IGNORECASE), 'sum'),
     # "some column B" → "sum column B" (the existing "some" rule covers cell refs only).
     (re.compile(r'\bsome\b(?=\s+column\b)', re.IGNORECASE), 'sum'),
+
+    # ══ "fill" STT mishears at utterance start ════════════════════════════════
+    # "fear row 2 with red" / "pure row 2 with red" → "fill row 2 with red"
+    # STT mishears "fill" as "fear" / "pure" / "pier" / "fur" at utterance start.
+    # Lookahead requires "row" + digit immediately after so "I fear row changes"
+    # (conversational) is NOT rewritten.
+    (re.compile(r'^(?:fear|pure|pier|fur)\s+row\b(?=\s+\d+\b)', re.IGNORECASE), 'fill row'),
 
     # ══ "row" STT mishears in fill / color / format context ══════════════════
     # "fill/color/format/highlight roll/role/roto [N]" → "... row [N]"
@@ -2429,6 +2455,27 @@ def check_command_slots(intent: str | None, text: str,
             return (
                 "Should I sort ascending or descending? "
                 "Please say: sort by column A ascending."
+            )
+        # "sort by V descending" — 'V' is a common STT mishear of 'B' in some
+        # accents and microphone setups.  Ask before executing rather than silently
+        # using the wrong column.
+        if re.search(r'\bby\s+v\s+(?:ascending|descending|asc|desc)\b', lower):
+            _v_dir_m = re.search(r'\b(ascending|descending)\b', lower)
+            _v_dir   = _v_dir_m.group(1) if _v_dir_m else 'ascending'
+            return (
+                f"Did you mean column B {_v_dir}? "
+                "If you meant column V, please say it again clearly."
+            )
+        # "sort by pre-ascending" — STT garbles a column+direction into a single
+        # hyphenated token (e.g. "pre-ascending" for "B ascending").
+        # No valid sort command uses a hyphenated column-direction form, so any
+        # match here is always a garble — block unconditionally and ask.
+        _sort_hyph = re.search(r'\bby\s+(\w+)-(ascending|descending)\b', lower)
+        if _sort_hyph:
+            _dir_part = _sort_hyph.group(2)
+            return (
+                f"I heard '{_sort_hyph.group(1)}' as the column but that doesn't look right. "
+                f"Did you mean column B {_dir_part}?"
             )
         # Lowercase 2-letter column starting with "b" after "by" likely means
         # STT heard "B" and output a phonetically-similar 2-letter sequence.

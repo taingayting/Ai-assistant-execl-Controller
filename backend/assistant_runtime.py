@@ -466,6 +466,7 @@ class SaraRuntime:
             # Wait for TTS to finish before opening the mic again
             tts_engine.wait_until_done()
             self._record_tts_latency()
+            self._set_ui_status('Done', state='idle')
 
             # Detect whether process_command executed a real action or only
             # asked for clarification.  process_command adds to conv_buffer
@@ -641,7 +642,7 @@ class SaraRuntime:
             and Sara asks for clarification instead of executing a wrong action.
         """
         self._call_ui_hook('set_processing')
-        self._set_ui_status('Processing command...', state='processing')
+        self._set_ui_status('Thinking...', state='processing')
 
         # Detect intent before routing so we have a fallback reference if the
         # router returns 'unknown'.
@@ -803,12 +804,12 @@ class SaraRuntime:
                 if pre_intent:
                     readable = pre_intent.replace('_', ' ')
                     message = (
-                        f"I think you wanted to {readable}, but I couldn't parse the details. "
-                        "Could you say that again more clearly?"
+                        f"Almost there — I think you meant {readable}. "
+                        "Could you say the full command again?"
                     )
                 else:
                     message = (
-                        "I didn't quite understand. "
+                        "Hmm, I'm not sure what you meant. "
                         "Did you want to add a row, calculate something, or do something else?"
                     )
             else:
@@ -817,13 +818,12 @@ class SaraRuntime:
                 if pre_intent:
                     readable = pre_intent.replace('_', ' ')
                     message = (
-                        f"I heard something about '{readable}' but couldn't understand the full command. "
-                        "Please try again."
+                        f"Hmm, I think you meant {readable} — can you say the full command again?"
                     )
                 else:
                     message = (
-                        "I didn't quite catch that. "
-                        "Try saying something like: open Excel, add row, or calculate average."
+                        "I didn't quite catch that — try something like: "
+                        "add row, open Excel, or calculate average."
                     )
             self.respond(message)
             # Do NOT add failed/unclear turns to the buffer — it adds noise to
@@ -832,6 +832,7 @@ class SaraRuntime:
 
         log.info('[Agent] Passing routed action to agent')
         log.info('[Sara] Executing action')
+        self._set_ui_status('Executing...', state='processing')
         _t_exec = time.perf_counter()
         result = self.agent.handle_action(action, auto_correct=True)
         _exec_ms = (time.perf_counter() - _t_exec) * 1000

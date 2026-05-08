@@ -484,6 +484,7 @@ class StatusDot(QWidget):
     def set_state(self, state: str) -> None:
         self._color = {
             "idle": self.COLOR_IDLE,
+            "done": self.COLOR_IDLE,
             "listening": self.COLOR_LISTENING,
             "processing": self.COLOR_PROCESSING,
             "speaking": self.COLOR_SPEAKING,
