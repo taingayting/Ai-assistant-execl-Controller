@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Office Assistant - Frontend</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <div class="logo">S</div>
+      <div>
+        <h1>Smart Office Assistant</h1>
+        <p class="tag">Voice-controlled Excel automation — demo-ready UI</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Text Command removed — audio-only UI kept below -->
+
+    <section>
+      <h2>Audio Upload / Recording</h2>
+      <div class="recorder">
+        <div class="recorder-row">
+          <button id="startRec" class="btn primary"><svg class="icon" aria-hidden><use href="icons.svg#icon-record"></use></svg>Start</button>
+          <button id="stopRec" class="btn" disabled><svg class="icon" aria-hidden><use href="icons.svg#icon-stop"></use></svg>Stop</button>
+          <button id="playRec" class="btn" disabled><svg class="icon" aria-hidden><use href="icons.svg#icon-play"></use></svg>Play</button>
+          <button id="reRecord" class="btn" disabled><svg class="icon" aria-hidden><use href="icons.svg#icon-redo"></use></svg>Re-record</button>
+        </div>
+
+        <div class="recorder-row small-controls">
+          <label class="small">Language:
+            <select id="speechLang">
+              <option value="en-US">English</option>
+              <option value="zh-CN">中文 (Chinese)</option>
+              <option value="ja-JP">日本語 (Japanese)</option>
+              <option value="ko-KR">한국어 (Korean)</option>
+              <option value="th-TH">ไทย (Thai)</option>
+              <option value="km-KH">ខ្មែរ (Khmer)</option>
+              <option value="fr-FR">Français (French)</option>
+              <option value="es-ES">Español (Spanish)</option>
+              <option value="de-DE">Deutsch (German)</option>
+              <option value="vi-VN">Tiếng Việt (Vietnamese)</option>
+              <option value="ar-SA">العربية (Arabic)</option>
+            </select>
+          </label>
+          <label class="small">Excel filename: <input id="recFilename" value="data.xlsx"></label>
+        </div>
+
+        <div class="recorder-area">
+          <audio id="recPlayer" controls hidden></audio>
+          <div class="transcript">
+            <label for="transcriptText"><strong>Transcript</strong> (editable)</label>
+            <textarea id="transcriptText" placeholder="Transcription will appear here..." ></textarea>
+                <div style="margin-top:8px"><strong>Cleaned Command</strong>
+                  <div id="cleanedText" class="muted" style="margin-top:6px">No cleaned command yet.</div>
+                </div>
+            <div class="recorder-row">
+              <button id="sendTranscript" class="btn primary"><svg class="icon" aria-hidden><use href="icons.svg#icon-send"></use></svg>Parse Transcript</button>
+              <button id="sendAudio" class="btn" disabled><svg class="icon" aria-hidden><use href="icons.svg#icon-upload"></use></svg>Server Transcribe</button>
+              <span id="recStatus" class="muted">Idle</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="recorder-result">
+          <h3>Parsed Action</h3>
+          <div class="action-preview card" style="margin-top:8px; padding:14px;">
+            <div id="actionPreview" style="font-size:1.05em; font-weight:500; color:var(--text)">Speak or type a command, then click Send.</div>
+          </div>
+          <div id="cleanedRow" style="margin-top:8px; font-size:0.9em; color:var(--muted)">
+            <strong>Cleaned command:</strong> <span id="cleanedTextParsed">—</span>
+          </div>
+          <details style="margin-top:8px">
+            <summary style="cursor:pointer; font-size:0.85em; color:var(--muted)">Raw JSON</summary>
+            <pre id="recParsed" style="margin-top:4px; font-size:0.82em">{}</pre>
+          </details>
+          <div class="suggestions card" style="margin-top:12px; padding:12px;">
+            <strong>Suggestions</strong>
+            <div id="suggestionsList" class="muted" style="margin-top:8px">No suggestions yet.</div>
+          </div>
+          <div class="history card" style="margin-top:12px; padding:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center"><strong>Command History</strong>
+              <button id="clearHistory" class="btn" style="padding:6px 8px; font-size:13px">Clear</button>
+            </div>
+            <div id="commandHistory" style="margin-top:8px; color:var(--muted)">No history yet.</div>
+          </div>
+          <div class="recorder-row" style="margin-top:14px; gap:12px">
+            <button id="executeParsed" class="btn" disabled><svg class="icon" aria-hidden><use href="icons.svg#icon-check"></use></svg>Execute</button>
+            <a id="recDownload" href="#" hidden class="link"><svg class="icon" aria-hidden><use href="icons.svg#icon-download"></use></svg>Download Excel</a>
+          </div>
+          <div class="recorder-row undo-row" style="margin-top:10px">
+            <button id="undoBtn" class="btn"><svg class="icon" aria-hidden><use href="icons.svg#icon-redo"></use></svg>Undo</button>
+            <label class="small">Steps back:
+              <select id="undoSteps">
+                <option value="1" selected>1 (latest)</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results are shown inline in the Text Command and Recorder sections -->
+
+    <section id="metricsSection">
+      <h2>Metrics</h2>
+      <div class="metrics-grid" id="metricsGrid">
+        <div class="metric-card"><div class="metric-value" id="mCommands">-</div><div class="metric-label">Commands Processed</div></div>
+        <div class="metric-card"><div class="metric-value" id="mLatency">-</div><div class="metric-label">Avg Latency (ms)</div></div>
+        <div class="metric-card"><div class="metric-value" id="mGroq">-</div><div class="metric-label">Groq Usage</div></div>
+        <div class="metric-card"><div class="metric-value" id="mOllama">-</div><div class="metric-label">Ollama Usage</div></div>
+        <div class="metric-card"><div class="metric-value" id="mHeuristic">-</div><div class="metric-label">Heuristic Usage</div></div>
+        <div class="metric-card"><div class="metric-value" id="mSuccess">-</div><div class="metric-label">Success Rate</div></div>
+      </div>
+      <button id="refreshMetrics" class="btn" style="margin-top:10px">Refresh</button>
+    </section>
+
+    <section id="workflowSection">
+      <h2>Workflows</h2>
+      <div class="wf-toolbar">
+        <input id="wfSearch" type="text" placeholder="Filter workflows…" class="wf-search">
+        <select id="wfCategoryFilter" class="wf-category-filter">
+          <option value="">All categories</option>
+        </select>
+      </div>
+      <div id="workflowGrid" class="wf-grid">
+        <div class="muted" style="padding:18px">Loading workflows…</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Confirmation modal -->
+  <div id="confirmModal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" id="modalBackdrop"></div>
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-body">
+        <h3 id="modalTitle">Please confirm</h3>
+        <p id="modalMessage">Are you sure?</p>
+      </div>
+      <div class="modal-actions">
+        <button id="modalCancel" class="btn">Cancel</button>
+        <button id="modalConfirm" class="btn primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+  <!-- Loading spinner (hidden by default) -->
+  <div id="spinner" class="spinner" hidden aria-label="Loading…"></div>
+  <!-- Toast notifications container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Ignore environment files containing secrets
+.env
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Backups & runtime data
+*.bak*
+backend/confirmations/
+backend/files/*.xlsx
+
+# OS
+Thumbs.db
+.DS_Store

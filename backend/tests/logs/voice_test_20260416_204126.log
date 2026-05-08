@@ -1,0 +1,120 @@
+
+════════════════════════════════════════════════════════════════
+  Sara Voice Pipeline — End-to-End Real Microphone Test
+════════════════════════════════════════════════════════════════
+  2026-04-16 20:41:26
+  Mode    : PARSE ONLY (safe)
+  Timeout : 7.0s per utterance
+  Language: en
+
+  Microphone : [1] Microphone Array (Realtek(R) Au  (44100 Hz)
+
+  Running 5 test(s):
+    1.  Say: 'open excel'  →  triggers the open-Excel action
+    2.  Say: 'add row John 90'  →  name=John, score=90 — tests phonetic correction path
+    3.  Say: 'write cell C2 12'  →  cell=C2, value=12 — tests cell-ref normalisation
+    4.  Say: 'go to cell B3'  →  cell navigation — must NOT route to switch_sheet
+    5.  Say: 'switch sheet Sheet2'  →  sheet name = Sheet2 — tests sheet-slot path
+
+────────────────────────────────────────────────────────────────
+  Test 1/5  ▸  Say: "open excel"
+  (triggers the open-Excel action)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…
+  Stage 1  ✓ Voice + STT OK  (33.4s)  raw: 'open Excel  open Excel'
+  Stage 2  Corrected:  'open Excel  open Excel' → 'open excel  open Excel'
+  Stage 3  ✓ Intent match:  open_excel
+  Stage 4  ✓ Slots complete
+  Stage 5  ≠ Action type:  got open_excel_app  expected open_excel  [heuristic  12ms]
+  Stage 6  Skipped  (add --execute to run real Excel actions)
+
+  FAIL ✗  →  action=open_excel_app
+
+────────────────────────────────────────────────────────────────
+  Test 2/5  ▸  Say: "add row John 90"
+  (name=John, score=90 — tests phonetic correction path)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…
+  Stage 1  ✓ Voice + STT OK  (15.0s)  raw: 'John 19  at'
+  Stage 2  No correction:  'John 19  at'
+  Stage 3  ✗ No intent detected  (expected: add_row)
+  Stage 4  ✓ Slots complete
+  Stage 5  ✗ Action unknown  [ollama  9342ms]  (all LLM tiers exhausted)
+  Stage 6  Skipped  (add --execute to run real Excel actions)
+
+  FAIL ✗  →  intent=none, action=?
+
+────────────────────────────────────────────────────────────────
+  Test 3/5  ▸  Say: "write cell C2 12"
+  (cell=C2, value=12 — tests cell-ref normalisation)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…
+  Stage 1  ✓ Voice + STT OK  (14.0s)  raw: 'rice substitute 12'
+  Stage 2  Corrected:  'rice substitute 12' → 'write substitute 12'
+  Stage 3  ✗ No intent detected  (expected: write_cell)
+  Stage 4  ✓ Slots complete
+  Stage 5  ✗ Action unknown  [ollama  5562ms]  (all LLM tiers exhausted)
+  Stage 6  Skipped  (add --execute to run real Excel actions)
+
+  FAIL ✗  →  intent=none, action=?
+
+────────────────────────────────────────────────────────────────
+  Test 4/5  ▸  Say: "go to cell B3"
+  (cell navigation — must NOT route to switch_sheet)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…
+  Stage 1  ✓ Voice + STT OK  (9.7s)  raw: 'go to B3'
+  Stage 2  No correction:  'go to B3'
+  Stage 3  ✓ Intent match:  read_cell
+  Stage 4  ✓ Slots complete
+  Stage 5  ✗ Action unknown  [heuristic  5ms]  (all LLM tiers exhausted)
+  Stage 6  Skipped  (add --execute to run real Excel actions)
+
+  FAIL ✗  →  action=?
+
+────────────────────────────────────────────────────────────────
+  Test 5/5  ▸  Say: "switch sheet Sheet2"
+  (sheet name = Sheet2 — tests sheet-slot path)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…
+  Stage 1  ✓ Voice + STT OK  (10.4s)  raw: 'sweet she too'
+  Stage 2  No correction:  'sweet she too'
+  Stage 3  ✗ No intent detected  (expected: switch_sheet)
+  Stage 4  ✓ Slots complete
+  Stage 5  ✗ Action unknown  [unknown  4673ms]  (all LLM tiers exhausted)
+  Stage 6  Skipped  (add --execute to run real Excel actions)
+
+  FAIL ✗  →  intent=none, action=unknown
+
+════════════════════════════════════════════════════════════════
+  SUMMARY
+════════════════════════════════════════════════════════════════
+  #    Say                           Voice   STT   Intent          Slots   Action    Result 
+  ---  ----------------------------  ------  ----  --------------  ------  --------  -------
+  1    "open excel"                  OK  OK  open_excel  OK  open_exc  FAIL ✗
+  2    "add row John 90"             OK  OK  none   OK  ?  FAIL ✗
+  3    "write cell C2 12"            OK  OK  none   OK  ?  FAIL ✗
+  4    "go to cell B3"               OK  OK  read_cell  OK  ?  FAIL ✗
+  5    "switch sheet Sheet2"         OK  OK  none   OK  unknown  FAIL ✗
+
+  Total tests    : 5
+  No voice       : 0
+  STT empty      : 0
+  STT error      : 0
+  Intent correct : 2/5
+  Slots complete : 5/5
+  Action correct : 0/5
+  Overall PASS   : 0/5  5 failing
+
+  Full log: D:\year4\speech_to_text\backend\tests\logs\voice_test_20260416_204126.log
+════════════════════════════════════════════════════════════════

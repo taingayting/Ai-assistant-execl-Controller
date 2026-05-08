@@ -1,0 +1,170 @@
+{
+  "version": "1.1",
+  "description": "Sara voice command coverage test dataset. Each entry is one STT transcript the pipeline must handle. Add rows here; test_voice_coverage.py picks them up automatically.",
+  "cases": [
+    {"id": "FA001", "raw_stt": "open excel",                       "expected_intent": "open_excel",       "expected_corrected_contains": "open excel",   "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FA002", "raw_stt": "open my spreadsheet",              "expected_intent": "open_excel",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+    {"id": "FA003", "raw_stt": "open my workbook",                 "expected_intent": "open_excel",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+    {"id": "FA004", "raw_stt": "opened excel",                     "expected_intent": "open_excel",       "expected_corrected_contains": "open excel",   "slot_complete": true,  "low_conf_expected": false, "note": "past-tense STT glitch"},
+    {"id": "FA005", "raw_stt": "open sound",                       "expected_intent": "open_excel",       "expected_corrected_contains": "open excel",   "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: sound=excel"},
+    {"id": "FA006", "raw_stt": "Excel",                            "expected_intent": "open_excel",       "expected_corrected_contains": "open excel",   "slot_complete": true,  "low_conf_expected": false, "note": "bare app name - P7 fix"},
+    {"id": "FA007", "raw_stt": "opal excel",                       "expected_intent": "open_excel",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: opal=open"},
+
+    {"id": "FA010", "raw_stt": "close excel",                      "expected_intent": "close_excel",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FA011", "raw_stt": "close the workbook",               "expected_intent": "close_excel",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+    {"id": "FA012", "raw_stt": "clothes excel",                    "expected_intent": "close_excel",      "expected_corrected_contains": "close excel",  "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: clothes=close"},
+    {"id": "FA013", "raw_stt": "close exam",                       "expected_intent": "close_excel",      "expected_corrected_contains": "close excel",  "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: exam=excel"},
+    {"id": "FA014", "raw_stt": "save and close",                   "expected_intent": "close_excel",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural compound"},
+    {"id": "FA015", "raw_stt": "safe and close",                   "expected_intent": "close_excel",      "expected_corrected_contains": "save and close","slot_complete": true, "low_conf_expected": false, "note": "phonetic: safe=save"},
+    {"id": "FA016", "raw_stt": "self and close",                   "expected_intent": "close_excel",      "expected_corrected_contains": "save and close","slot_complete": true, "low_conf_expected": false, "note": "real mic log"},
+
+    {"id": "FA020", "raw_stt": "save",                             "expected_intent": "save",             "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "valid solo command"},
+    {"id": "FA021", "raw_stt": "safe",                             "expected_intent": "save",             "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: safe=save"},
+    {"id": "FA022", "raw_stt": "sake the file",                    "expected_intent": "save",             "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: sake=save"},
+    {"id": "FA023", "raw_stt": "soft self",                        "expected_intent": "save",             "expected_corrected_contains": "save",         "slot_complete": true,  "low_conf_expected": false, "note": "real mic log"},
+
+    {"id": "FA030", "raw_stt": "create excel",                     "expected_intent": "create_excel",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FA031", "raw_stt": "create a new spreadsheet",         "expected_intent": "create_excel",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+    {"id": "FA032", "raw_stt": "great excel",                      "expected_intent": "create_excel",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: great=create"},
+
+    {"id": "FA040", "raw_stt": "rename file report",               "expected_intent": "rename_file",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FA041", "raw_stt": "rename the spreadsheet budget",    "expected_intent": "rename_file",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+
+    {"id": "RC001", "raw_stt": "add row John 90",                  "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "RC002", "raw_stt": "at Rojo 90",                       "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": false, "low_conf_expected": false, "note": "rojo variant - name lost in correction, slot gap expected"},
+    {"id": "RC003", "raw_stt": "atro John 90",                     "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": true,  "low_conf_expected": false, "note": "real mic log P6"},
+    {"id": "RC004", "raw_stt": "adele John 90",                    "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": true,  "low_conf_expected": false, "note": "STT merge artifact"},
+    {"id": "RC005", "raw_stt": "adroit John 90",                   "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": true,  "low_conf_expected": false, "note": "phonetic variant"},
+    {"id": "RC006", "raw_stt": "and grow John 90",                 "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": true,  "low_conf_expected": false, "note": "log-confirmed"},
+    {"id": "RC007", "raw_stt": "add row",                          "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": false, "low_conf_expected": false, "note": "missing values - slot gap"},
+    {"id": "RC008", "raw_stt": "add row John with score ninety",   "expected_intent": "add_row",          "expected_corrected_contains": "add row",      "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing + number word"},
+
+    {"id": "RC020", "raw_stt": "delete row 3",                     "expected_intent": "delete_row",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "RC021", "raw_stt": "remove row 5",                     "expected_intent": "delete_row",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+    {"id": "RC022", "raw_stt": "delete throw 3",                   "expected_intent": "delete_row",       "expected_corrected_contains": "delete row",   "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: throw=row"},
+    {"id": "RC023", "raw_stt": "delete the row 3",                 "expected_intent": "delete_row",       "expected_corrected_contains": "delete row",   "slot_complete": true,  "low_conf_expected": false, "note": "natural with 'the'"},
+    {"id": "RC024", "raw_stt": "dell row 2",                       "expected_intent": "delete_row",       "expected_corrected_contains": "delete row",   "slot_complete": true,  "low_conf_expected": false, "note": "phonetic: dell=delete"},
+    {"id": "RC025", "raw_stt": "delete row",                       "expected_intent": "delete_row",       "expected_corrected_contains": null,           "slot_complete": false, "low_conf_expected": false, "note": "missing row number - slot gap"},
+
+    {"id": "RC030", "raw_stt": "add column Name",                  "expected_intent": "add_column",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "RC031", "raw_stt": "delete column A",                  "expected_intent": "delete_column",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "RC032", "raw_stt": "remove column B",                  "expected_intent": "delete_column",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+
+    {"id": "RC040", "raw_stt": "insert row at 3",                  "expected_intent": "insert_row_at",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - intent was missing"},
+    {"id": "RC041", "raw_stt": "insert a row before 5",            "expected_intent": "insert_row_at",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+    {"id": "RC042", "raw_stt": "insert column at B",               "expected_intent": "insert_column_at", "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - intent was missing"},
+    {"id": "RC043", "raw_stt": "insert a column before C",         "expected_intent": "insert_column_at", "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+
+    {"id": "CR001", "raw_stt": "write cell C2 12",                 "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "CR002", "raw_stt": "write healthy 212",                "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": false, "low_conf_expected": false, "note": "real mic log P7 - healthy=cell"},
+    {"id": "CR003", "raw_stt": "rice at C1 score",                 "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": true,  "low_conf_expected": false, "note": "rice/at double phonetic"},
+    {"id": "CR004", "raw_stt": "rise cell B3 test",                "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": true,  "low_conf_expected": false, "note": "rise=write phonetic"},
+    {"id": "CR005", "raw_stt": "right at A1 value",                "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": true,  "low_conf_expected": false, "note": "right=write phonetic"},
+    {"id": "CR006", "raw_stt": "write score in cell C1",           "expected_intent": "write_cell",       "expected_corrected_contains": "write cell C1","slot_complete": true,  "low_conf_expected": false, "note": "natural inverted phrasing"},
+    {"id": "CR007", "raw_stt": "write cell C1",                    "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": false, "low_conf_expected": false, "note": "missing value - slot gap"},
+    {"id": "CR008", "raw_stt": "write sell B3 90",                 "expected_intent": "write_cell",       "expected_corrected_contains": "write cell",   "slot_complete": true,  "low_conf_expected": false, "note": "sell=cell phonetic"},
+
+    {"id": "CR010", "raw_stt": "go to cell B3",                    "expected_intent": "read_cell",        "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical navigation"},
+    {"id": "CR011", "raw_stt": "go to B3",                         "expected_intent": "read_cell",        "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "short form"},
+    {"id": "CR012", "raw_stt": "go to free",                       "expected_intent": "read_cell",        "expected_corrected_contains": "F3",           "slot_complete": true,  "low_conf_expected": false, "note": "real mic log P7 - free=F3"},
+    {"id": "CR013", "raw_stt": "read cell A1",                     "expected_intent": "read_cell",        "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "explicit read"},
+    {"id": "CR014", "raw_stt": "what is in cell B5",               "expected_intent": "read_cell",        "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural question phrasing"},
+
+    {"id": "CR020", "raw_stt": "clear cell B3",                    "expected_intent": "clear_cell",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "CR021", "raw_stt": "empty cell A1",                    "expected_intent": "clear_cell",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: empty"},
+    {"id": "CR022", "raw_stt": "erase the cell C4",                "expected_intent": "clear_cell",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: erase"},
+    {"id": "CR023", "raw_stt": "delete cell B3",                   "expected_intent": "delete_cell",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "delete vs clear - intent was missing"},
+    {"id": "CR024", "raw_stt": "delete the cell A1",               "expected_intent": "delete_cell",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing with 'the'"},
+
+    {"id": "CR030", "raw_stt": "read range A1 to B5",              "expected_intent": "read_range",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "CR031", "raw_stt": "show range B1 C10",                "expected_intent": "read_range",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+    {"id": "CR032", "raw_stt": "delete range A1 B3",               "expected_intent": "delete_range",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "intent was missing"},
+
+    {"id": "SH001", "raw_stt": "switch sheet Sheet2",              "expected_intent": "switch_sheet",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "SH002", "raw_stt": "go to sheet Data",                 "expected_intent": "switch_sheet",     "expected_corrected_contains": "switch sheet", "slot_complete": true,  "low_conf_expected": false, "note": "natural: go to sheet"},
+    {"id": "SH003", "raw_stt": "navigate to sheet Summary",        "expected_intent": "switch_sheet",     "expected_corrected_contains": "switch sheet", "slot_complete": true,  "low_conf_expected": false, "note": "natural: navigate"},
+    {"id": "SH004", "raw_stt": "switch cheat sheet 2",             "expected_intent": "switch_sheet",     "expected_corrected_contains": "switch sheet", "slot_complete": true,  "low_conf_expected": false, "note": "real STT P6 - cheat=sheet"},
+    {"id": "SH005", "raw_stt": "switch shit shit",                 "expected_intent": "switch_sheet",     "expected_corrected_contains": null,           "slot_complete": false, "low_conf_expected": false, "note": "real mic P7 - shit=sheet, no name - safe fallback"},
+    {"id": "SH006", "raw_stt": "switch sheet",                     "expected_intent": "switch_sheet",     "expected_corrected_contains": null,           "slot_complete": false, "low_conf_expected": false, "note": "missing sheet name - slot gap"},
+
+    {"id": "SH010", "raw_stt": "create sheet Budget",              "expected_intent": "create_sheet",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "SH011", "raw_stt": "add a new sheet",                  "expected_intent": "create_sheet",     "expected_corrected_contains": null,           "slot_complete": false, "low_conf_expected": false, "note": "natural - missing name"},
+    {"id": "SH012", "raw_stt": "new sheet",                        "expected_intent": "create_sheet",     "expected_corrected_contains": "create sheet", "slot_complete": false, "low_conf_expected": false, "note": "short natural form"},
+
+    {"id": "SH020", "raw_stt": "delete sheet Sheet1",              "expected_intent": "delete_sheet",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "SH021", "raw_stt": "remove the sheet Summary",         "expected_intent": "delete_sheet",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+
+    {"id": "SH030", "raw_stt": "rename sheet Sheet1 to Budget",    "expected_intent": "rename_sheet",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "SH031", "raw_stt": "rename the sheet Data",            "expected_intent": "rename_sheet",     "expected_corrected_contains": null,           "slot_complete": false, "low_conf_expected": false, "note": "missing new name - slot gap"},
+
+    {"id": "SH040", "raw_stt": "list sheets",                      "expected_intent": "list_sheets",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "SH041", "raw_stt": "show all sheets",                  "expected_intent": "list_sheets",      "expected_corrected_contains": "list sheets",  "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+    {"id": "SH042", "raw_stt": "what sheets are there",            "expected_intent": "list_sheets",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "question form"},
+
+    {"id": "FM001", "raw_stt": "calculate sum column A",           "expected_intent": "calculate_sum",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FM002", "raw_stt": "calculate some column B",          "expected_intent": "calculate_sum",    "expected_corrected_contains": "calculate sum","slot_complete": true,  "low_conf_expected": false, "note": "some=sum STT phonetic"},
+    {"id": "FM003", "raw_stt": "sum of column C",                  "expected_intent": "calculate_sum",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural phrasing"},
+    {"id": "FM004", "raw_stt": "calculate sam column A",           "expected_intent": "calculate_sum",    "expected_corrected_contains": "calculate sum","slot_complete": true,  "low_conf_expected": false, "note": "sam=sum phonetic"},
+
+    {"id": "FM010", "raw_stt": "calculate average column B",       "expected_intent": "calculate_average","expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FM011", "raw_stt": "average of column A",              "expected_intent": "calculate_average","expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+
+    {"id": "FM020", "raw_stt": "write formula SUM A1 A10 in C1",   "expected_intent": "write_formula",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FM021", "raw_stt": "insert formula",                   "expected_intent": "write_formula",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: insert"},
+
+    {"id": "FT001", "raw_stt": "format cell A1 bold",              "expected_intent": "format_cells",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FT002", "raw_stt": "bold column A",                    "expected_intent": "format_cells",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: bold"},
+    {"id": "FT003", "raw_stt": "colour row 1 red",                 "expected_intent": "format_cells",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "UK spelling"},
+    {"id": "FT004", "raw_stt": "color row 2 blue",                 "expected_intent": "format_cells",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "US spelling"},
+
+    {"id": "FT010", "raw_stt": "create chart bar A1 B10",          "expected_intent": "create_chart",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FT011", "raw_stt": "make a bar chart",                 "expected_intent": "create_chart",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+
+    {"id": "FT020", "raw_stt": "set column A width to 20",         "expected_intent": "set_column_width", "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - intent was missing"},
+    {"id": "FT021", "raw_stt": "auto fit column B",                "expected_intent": "set_column_width", "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "auto-fit variant"},
+    {"id": "FT022", "raw_stt": "resize column C",                  "expected_intent": "set_column_width", "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: resize"},
+    {"id": "FT023", "raw_stt": "make column A wider",              "expected_intent": "set_column_width", "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: wider/narrower"},
+
+    {"id": "SF001", "raw_stt": "sort column A ascending",          "expected_intent": "sort_range",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "SF002", "raw_stt": "sort by score",                    "expected_intent": "sort_range",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: sort by"},
+    {"id": "SF003", "raw_stt": "sort range A1 B10",                "expected_intent": "sort_range",       "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "range form"},
+
+    {"id": "SF010", "raw_stt": "find Excel replace with Sheet",    "expected_intent": "find_replace",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "find [term] replace with [replacement] - natural form"},
+    {"id": "SF011", "raw_stt": "find and replace",                 "expected_intent": "find_replace",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural shorthand"},
+    {"id": "SF012", "raw_stt": "replace John with Jane",           "expected_intent": "find_replace",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural direct form"},
+    {"id": "SF013", "raw_stt": "search and replace old new",       "expected_intent": "find_replace",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "search variant"},
+
+    {"id": "SF020", "raw_stt": "filter by column A value 90",      "expected_intent": "filter_table",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - intent was missing"},
+    {"id": "SF021", "raw_stt": "filter column B equals active",    "expected_intent": "filter_table",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+    {"id": "SF022", "raw_stt": "show only rows where score is 90", "expected_intent": "filter_table",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural question form"},
+
+    {"id": "SF030", "raw_stt": "clear filter",                     "expected_intent": "clear_filter",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - intent was missing"},
+    {"id": "SF031", "raw_stt": "remove the filter",                "expected_intent": "clear_filter",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+    {"id": "SF032", "raw_stt": "show all rows",                    "expected_intent": "clear_filter",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: show all"},
+    {"id": "SF033", "raw_stt": "reset filter",                     "expected_intent": "clear_filter",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: reset"},
+
+    {"id": "FZ001", "raw_stt": "freeze panes",                     "expected_intent": "freeze_panes",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FZ002", "raw_stt": "freeze the top row",               "expected_intent": "freeze_panes",     "expected_corrected_contains": "freeze panes", "slot_complete": true,  "low_conf_expected": false, "note": "natural - correction normalises"},
+    {"id": "FZ003", "raw_stt": "freeze rows",                      "expected_intent": "freeze_panes",     "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "short natural"},
+
+    {"id": "FZ010", "raw_stt": "unfreeze panes",                   "expected_intent": "unfreeze_panes",   "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FZ011", "raw_stt": "unfreeze the rows",                "expected_intent": "unfreeze_panes",   "expected_corrected_contains": "unfreeze panes","slot_complete": true, "low_conf_expected": false, "note": "natural"},
+
+    {"id": "FZ020", "raw_stt": "merge cells A1 B1",                "expected_intent": "merge_cells",      "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical"},
+    {"id": "FZ021", "raw_stt": "combine cells A1 to B2",           "expected_intent": "merge_cells",      "expected_corrected_contains": "merge cells",  "slot_complete": true,  "low_conf_expected": false, "note": "natural: combine"},
+
+    {"id": "FZ030", "raw_stt": "unmerge cells A1 B1",              "expected_intent": "unmerge_cells",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - intent was missing"},
+    {"id": "FZ031", "raw_stt": "split the merged cells A1 B2",     "expected_intent": "unmerge_cells",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural: split"},
+    {"id": "FZ032", "raw_stt": "unmerge A1 B1",                    "expected_intent": "unmerge_cells",    "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "short form"},
+
+    {"id": "UN001", "raw_stt": "undo",                             "expected_intent": "undo",             "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "canonical - valid solo"},
+    {"id": "UN002", "raw_stt": "undo last action",                 "expected_intent": "undo",             "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+    {"id": "UN003", "raw_stt": "undo that",                        "expected_intent": "undo",             "expected_corrected_contains": null,           "slot_complete": true,  "low_conf_expected": false, "note": "natural"},
+
+    {"id": "NO001", "raw_stt": "taste",                            "expected_intent": null,               "expected_corrected_contains": null,           "slot_complete": null,  "low_conf_expected": true,  "note": "known noise word"},
+    {"id": "NO002", "raw_stt": "um",                               "expected_intent": null,               "expected_corrected_contains": null,           "slot_complete": null,  "low_conf_expected": true,  "note": "filler"},
+    {"id": "NO003", "raw_stt": "John 19 at",                       "expected_intent": null,               "expected_corrected_contains": null,           "slot_complete": null,  "low_conf_expected": true,  "note": "3-word noise P6"},
+    {"id": "NO004", "raw_stt": "hello world",                      "expected_intent": null,               "expected_corrected_contains": null,           "slot_complete": null,  "low_conf_expected": true,  "note": "2-word noise"},
+    {"id": "NO005", "raw_stt": "shit shit",                        "expected_intent": null,               "expected_corrected_contains": null,           "slot_complete": null,  "low_conf_expected": true,  "note": "profanity-only - no switch prefix"}
+  ]
+}

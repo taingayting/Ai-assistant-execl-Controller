@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /d/year4/speech_to_text -maxdepth 3 -type f \\\\\\(-name *.py -o -name requirements*.txt -o -name *.yml -o -name *.yaml -o -name *.md \\\\\\) ! -path */.venv/* ! -path */__pycache__/* ! -path */.pytest_cache/*)",
+      "Bash(python -m pytest tests/test_wake_detector.py -q --tb=short)",
+      "Bash(find . -name \"*.py\" -type f -exec wc -l {} \\\\;)",
+      "Read(//d/year4/speech_to_text/**)",
+      "PowerShell(cd d:\\\\year4\\\\speech_to_text; $p = Start-Process -FilePath python -ArgumentList \"-m pytest backend/tests/test_pipeline_patches.py -q --tb=short\" -Wait -NoNewWindow -PassThru -RedirectStandardOutput C:\\\\Temp\\\\full_after.txt -RedirectStandardError C:\\\\Temp\\\\full_after_err.txt; $p.ExitCode; Get-Content C:\\\\Temp\\\\full_after.txt | Select-Object -Last 10)",
+      "Bash(python -m pytest backend/tests/test_pipeline_patches.py::TestP33FormattingVoiceGrammar -v)"
+    ]
+  }
+}

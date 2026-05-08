@@ -1,0 +1,51 @@
+command,expected_type,actual_type,type_match,fields_pass,overall_pass,parse_latency_ms,exec_success,exec_latency_ms
+add row Tom 90,add_row,steps,False,False,False,2903.56,,0.0
+insert row Alice 85,add_row,steps,False,False,False,2501.66,,0.0
+add a new row with values Laptop 5 999,add_row,steps,False,False,False,2094.11,,0.0
+add row Sarah 72 A,add_row,steps,False,False,False,2744.0,,0.0
+insert new row Bob 100,add_row,steps,False,False,False,2368.36,,0.0
+add entry John 45,add_row,steps,False,False,False,2799.66,,0.0
+put a row with Apple 3.50 100,add_row,steps,False,False,False,5592.72,,0.0
+delete row 2,delete_row,steps,False,False,False,26899.19,,0.0
+remove the 3rd row,delete_row,steps,False,False,False,2800.84,,0.0
+delete row number 5,delete_row,steps,False,False,False,2148.6,,0.0
+remove first row,delete_row,steps,False,False,False,2070.29,,0.0
+"create excel with headers Name, Score",create_excel,steps,False,False,False,10146.46,,0.0
+make a new spreadsheet with columns Item Quantity Price,create_excel,steps,False,False,False,2913.96,,0.0
+create a new file with headers Name Age Grade,create_excel,steps,False,False,False,7599.8,,0.0
+create excel sheet for employees with columns ID Name Department Salary,create_excel,steps,False,False,False,2360.0,,0.0
+make a spreadsheet with headers Product and Revenue,create_excel,steps,False,False,False,11584.96,,0.0
+write 100 to B3,write_cell,steps,False,False,False,2853.2,,0.0
+put hello in cell A1,write_cell,steps,False,False,False,2321.3,,0.0
+set cell C5 to 42,write_cell,steps,False,False,False,8929.67,,0.0
+write Total in cell A10,write_cell,steps,False,False,False,2424.83,,0.0
+add column called Revenue,add_column,steps,False,False,False,8484.96,,0.0
+add a new column named Status,add_column,steps,False,False,False,2415.05,,0.0
+insert column Email,add_column,steps,False,False,False,6946.99,,0.0
+delete column B,delete_column,steps,False,False,False,2848.36,,0.0
+remove column C,delete_column,steps,False,False,False,6806.77,,0.0
+delete the column A,delete_column,steps,False,False,False,2114.76,,0.0
+calculate sum of row 1,calculate_row_sum,steps,False,False,False,8717.74,,0.0
+sum row 3,calculate_row_sum,steps,False,False,False,5534.88,,0.0
+calculate the average of column B,calculate_average,unknown,False,False,False,15847.26,,0.0
+average of column A,calculate_average,steps,False,False,False,2721.22,,0.0
+save the file,save,steps,False,False,False,2475.12,,0.0
+save,save,steps,False,False,False,10496.24,,0.0
+write formula SUM(A1:A10) in cell A11,write_formula,steps,False,False,False,5154.12,,0.0
+put formula AVERAGE(B2:B20) in B21,write_formula,steps,False,False,False,23051.21,,0.0
+write =SUM(C1:C5) to cell C6,write_formula,steps,False,False,False,5663.02,,0.0
+open file data.xlsx,open_file,unknown,False,False,False,9780.32,,0.0
+open the spreadsheet,open_file,unknown,False,False,False,15302.98,,0.0
+format cells A1 to A5 as bold,format_cells,unknown,False,False,False,14158.69,,0.0
+make row 1 bold,format_cells,unknown,False,False,False,13187.84,,0.0
+create a bar chart from A1 to C10,create_chart,unknown,False,False,False,12991.24,,0.0
+make a pie chart of the data,create_chart,unknown,False,False,False,12545.89,,0.0
+create a score sheet and add Tom 90 and Alex 85,steps,steps,True,True,True,13451.51,,0.0
+make an attendance table and add Alice present and Bob absent,steps,steps,True,True,True,43503.05,,0.0
+build a budget spreadsheet with headers Category and Amount then add Rent 1500 and Food 400,steps,steps,True,True,True,14055.54,,0.0
+create an inventory list with Product Quantity Price and add Pen 100 2 and Notebook 50 5,steps,steps,True,True,True,18072.66,,0.0
+hello how are you,unknown,unknown,True,True,True,11186.46,,0.0
+what is the weather today,unknown,unknown,True,True,True,10064.46,,0.0
+tell me a joke,unknown,unknown,True,True,True,11988.17,,0.0
+add row,unknown,unknown,True,True,True,11837.52,,0.0
+do something with the file,unknown,unknown,True,True,True,8423.61,,0.0

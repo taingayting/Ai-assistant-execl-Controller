@@ -1,0 +1,38 @@
+
+════════════════════════════════════════════════════════════════
+  Sara Voice Pipeline — End-to-End Real Microphone Test
+════════════════════════════════════════════════════════════════
+  2026-04-16 20:39:08
+  Mode    : PARSE ONLY (safe)
+  Timeout : 7.0s per utterance
+  Language: en
+
+  Microphone : [1] Microphone Array (Realtek(R) Au  (44100 Hz)
+
+  Running 2 test(s):
+    1.  Say: 'open excel'  →  triggers the open-Excel action
+    2.  Say: 'add row John 90'  →  name=John, score=90 — tests phonetic correction path
+
+────────────────────────────────────────────────────────────────
+  Test 1/2  ▸  Say: "open excel"
+  (triggers the open-Excel action)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…
+  Stage 1  ✓ Voice + STT OK  (13.6s)  raw: 'hey Sarah'
+  Stage 2  Corrected:  'hey Sarah' → 'h'
+  Stage 3  ✗ No intent detected  (expected: open_excel)
+  Stage 4  ✓ Slots complete
+  Stage 5  ✗ Action unknown  [unknown  11120ms]  (all LLM tiers exhausted)
+  Stage 6  Skipped  (add --execute to run real Excel actions)
+
+  FAIL ✗  →  intent=none, action=unknown
+
+────────────────────────────────────────────────────────────────
+  Test 2/2  ▸  Say: "add row John 90"
+  (name=John, score=90 — tests phonetic correction path)
+
+  Press ENTER, then speak immediately...    ● RECORDING — speak now
+
+  Stage 1  Listening (up to 7.0s)…

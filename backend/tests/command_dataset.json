@@ -1,0 +1,202 @@
+[
+  {
+    "command": "add row Tom 90",
+    "expected": {"type": "add_row", "values": ["Tom", 90]}
+  },
+  {
+    "command": "insert row Alice 85",
+    "expected": {"type": "add_row", "values": ["Alice", 85]}
+  },
+  {
+    "command": "add a new row with values Laptop 5 999",
+    "expected": {"type": "add_row", "values": ["Laptop", 5, 999]}
+  },
+  {
+    "command": "add row Sarah 72 A",
+    "expected": {"type": "add_row", "values": ["Sarah", 72, "A"]}
+  },
+  {
+    "command": "insert new row Bob 100",
+    "expected": {"type": "add_row", "values": ["Bob", 100]}
+  },
+  {
+    "command": "add entry John 45",
+    "expected": {"type": "add_row", "values": ["John", 45]}
+  },
+  {
+    "command": "put a row with Apple 3.50 100",
+    "expected": {"type": "add_row", "values": ["Apple", 3.50, 100]}
+  },
+  {
+    "command": "delete row 2",
+    "expected": {"type": "delete_row", "index": 2}
+  },
+  {
+    "command": "remove the 3rd row",
+    "expected": {"type": "delete_row", "index": 3}
+  },
+  {
+    "command": "delete row number 5",
+    "expected": {"type": "delete_row", "index": 5}
+  },
+  {
+    "command": "remove first row",
+    "expected": {"type": "delete_row", "index": 1}
+  },
+  {
+    "command": "create excel with headers Name, Score",
+    "expected": {"type": "create_excel", "headers": ["Name", "Score"]}
+  },
+  {
+    "command": "make a new spreadsheet with columns Item Quantity Price",
+    "expected": {"type": "create_excel", "headers": ["Item", "Quantity", "Price"]}
+  },
+  {
+    "command": "create a new file with headers Name Age Grade",
+    "expected": {"type": "create_excel", "headers": ["Name", "Age", "Grade"]}
+  },
+  {
+    "command": "create excel sheet for employees with columns ID Name Department Salary",
+    "expected": {"type": "create_excel", "headers": ["ID", "Name", "Department", "Salary"]}
+  },
+  {
+    "command": "make a spreadsheet with headers Product and Revenue",
+    "expected": {"type": "create_excel", "headers": ["Product", "Revenue"]}
+  },
+  {
+    "command": "write 100 to B3",
+    "expected": {"type": "write_cell", "cell": "B3", "value": 100}
+  },
+  {
+    "command": "put hello in cell A1",
+    "expected": {"type": "write_cell", "cell": "A1", "value": "hello"}
+  },
+  {
+    "command": "set cell C5 to 42",
+    "expected": {"type": "write_cell", "cell": "C5", "value": 42}
+  },
+  {
+    "command": "write Total in cell A10",
+    "expected": {"type": "write_cell", "cell": "A10", "value": "Total"}
+  },
+  {
+    "command": "add column called Revenue",
+    "expected": {"type": "add_column", "name": "Revenue"}
+  },
+  {
+    "command": "add a new column named Status",
+    "expected": {"type": "add_column", "name": "Status"}
+  },
+  {
+    "command": "insert column Email",
+    "expected": {"type": "add_column", "name": "Email"}
+  },
+  {
+    "command": "delete column B",
+    "expected": {"type": "delete_column", "column": "B"}
+  },
+  {
+    "command": "remove column C",
+    "expected": {"type": "delete_column", "column": "C"}
+  },
+  {
+    "command": "delete the column A",
+    "expected": {"type": "delete_column", "column": "A"}
+  },
+  {
+    "command": "calculate sum of row 1",
+    "expected": {"type": "calculate_row_sum", "index": 1}
+  },
+  {
+    "command": "sum row 3",
+    "expected": {"type": "calculate_row_sum", "index": 3}
+  },
+  {
+    "command": "calculate the average of column B",
+    "expected": {"type": "calculate_average", "column": "B"}
+  },
+  {
+    "command": "average of column A",
+    "expected": {"type": "calculate_average", "column": "A"}
+  },
+  {
+    "command": "save the file",
+    "expected": {"type": "save"}
+  },
+  {
+    "command": "save",
+    "expected": {"type": "save"}
+  },
+  {
+    "command": "write formula SUM(A1:A10) in cell A11",
+    "expected": {"type": "write_formula", "cell": "A11", "formula": "=SUM(A1:A10)"}
+  },
+  {
+    "command": "put formula AVERAGE(B2:B20) in B21",
+    "expected": {"type": "write_formula", "cell": "B21", "formula": "=AVERAGE(B2:B20)"}
+  },
+  {
+    "command": "write =SUM(C1:C5) to cell C6",
+    "expected": {"type": "write_formula", "cell": "C6", "formula": "=SUM(C1:C5)"}
+  },
+  {
+    "command": "open file data.xlsx",
+    "expected": {"type": "open_file"}
+  },
+  {
+    "command": "open the spreadsheet",
+    "expected": {"type": "open_file"}
+  },
+  {
+    "command": "format cells A1 to A5 as bold",
+    "expected": {"type": "format_cells", "bold": true}
+  },
+  {
+    "command": "make row 1 bold",
+    "expected": {"type": "format_cells", "bold": true}
+  },
+  {
+    "command": "create a bar chart from A1 to C10",
+    "expected": {"type": "create_chart", "chart_type": "bar"}
+  },
+  {
+    "command": "make a pie chart of the data",
+    "expected": {"type": "create_chart", "chart_type": "pie"}
+  },
+  {
+    "command": "create a score sheet and add Tom 90 and Alex 85",
+    "expected": {"type": "steps"}
+  },
+  {
+    "command": "make an attendance table and add Alice present and Bob absent",
+    "expected": {"type": "steps"}
+  },
+  {
+    "command": "build a budget spreadsheet with headers Category and Amount then add Rent 1500 and Food 400",
+    "expected": {"type": "steps"}
+  },
+  {
+    "command": "create an inventory list with Product Quantity Price and add Pen 100 2 and Notebook 50 5",
+    "expected": {"type": "steps"}
+  },
+  {
+    "command": "hello how are you",
+    "expected": {"type": "unknown"}
+  },
+  {
+    "command": "what is the weather today",
+    "expected": {"type": "unknown"}
+  },
+  {
+    "command": "tell me a joke",
+    "expected": {"type": "unknown"}
+  },
+  {
+    "command": "add row",
+    "expected": {"type": "unknown"}
+  },
+  {
+    "command": "do something with the file",
+    "expected": {"type": "unknown"}
+  }
+]
