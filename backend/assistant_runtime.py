@@ -989,6 +989,7 @@ class SaraRuntime:
         return 'I could not hear a command clearly.'
 
     def _set_idle_state(self) -> None:
+        self._call_ui_hook('set_idle')   # stops animations, re-enables mic
         self._set_ui_status('Idle', state='idle')
         if self.hide_ui_when_idle:
             self._hide_ui()

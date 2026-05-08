@@ -541,7 +541,6 @@ class SpinnerWidget(QWidget):
         start = -self._angle * 16
         span = -120 * 16
         painter.drawArc(rect, start, span)
-        super().paintEvent(event)
 
 
 class SaraFloatingWindow(QMainWindow):
@@ -644,6 +643,10 @@ class SaraFloatingWindow(QMainWindow):
 
     def _build_assistant_tab(self) -> QWidget:
         tab = QWidget()
+        tab.setObjectName("assistantTab")
+        # Prevent the system palette Window color (gray-blue on Windows 11) from
+        # bleeding through the space reserved by retainSizeWhenHidden widgets.
+        tab.setStyleSheet("#assistantTab { background: #111C27; }")
         layout = QVBoxLayout(tab)
         layout.setContentsMargins(0, 8, 0, 0)
         layout.setSpacing(8)
@@ -662,8 +665,17 @@ class SaraFloatingWindow(QMainWindow):
 
         self.thinking_label = QLabel("")
         self.thinking_label.setStyleSheet("color: #9FC2DA; font-size: 11px;")
-        self.thinking_spinner = SpinnerWidget()
         self.thinking_label.hide()
+        self.thinking_spinner = SpinnerWidget()
+
+        # Reserve layout space for both widgets so hiding them doesn't cause
+        # the thinking_row to collapse and bounce surrounding widgets.
+        _sp = self.thinking_spinner.sizePolicy()
+        _sp.setRetainSizeWhenHidden(True)
+        self.thinking_spinner.setSizePolicy(_sp)
+        _sp = self.thinking_label.sizePolicy()
+        _sp.setRetainSizeWhenHidden(True)
+        self.thinking_label.setSizePolicy(_sp)
 
         self.success_label = QLabel("")
         self.success_label.setWordWrap(True)
@@ -1105,7 +1117,7 @@ class SaraFloatingWindow(QMainWindow):
         self.status_dot.set_state("processing")
         self.status_label.setText("Transcribing...")
         self.transcript_view.setPlainText("Transcribing...")
-        self._start_thinking_indicator()
+        self._start_thinking_indicator("Transcribing")
         # Play TTS "working" message while waiting for backend (non-blocking)
         self._tts_worker = TTSWorker("Working on your Excel command")
         self._tts_worker.start()
@@ -1165,9 +1177,11 @@ class SaraFloatingWindow(QMainWindow):
             self._update_dev_panel(result)
 
         action = result.action
+        # An action may arrive as {"type": "add_row", ...} OR as {"steps": [...]}
+        # (the latter when _plan_and_validate wraps a single-step in a steps list).
+        # Multi-step = steps list with more than one entry (regardless of top-level type).
         is_multi_step = (
             isinstance(action, dict)
-            and action.get("type") in ("multi_step", "workflow")
             and isinstance(action.get("steps"), list)
             and len(action["steps"]) > 1
         )
@@ -1184,15 +1198,16 @@ class SaraFloatingWindow(QMainWindow):
                 self._show_suggestions(result.suggestions)
             else:
                 self._hide_suggestions()
-        elif action and isinstance(action, dict) and action.get("type"):
+        elif action and isinstance(action, dict) and (action.get("type") or action.get("steps")):
             # Single-step: show brief preview then auto-execute
+            # Handles both {"type": "add_row", ...} and {"steps": [single_step]}
             self._hide_plan_preview()
             self._hide_suggestions()
             preview = self._describe_single_action(action)
             self.response_view.setPlainText(f"Executing: {preview}")
             self.status_dot.set_state("processing")
             self.status_label.setText("Executing...")
-            self._start_thinking_indicator()
+            self._start_thinking_indicator("Executing")
             self._pending_result = result
             self._execute_worker = ExecuteWorker(action)
             self._execute_worker.completed.connect(self._on_execute_completed)
@@ -1266,7 +1281,7 @@ class SaraFloatingWindow(QMainWindow):
         self._hide_plan_preview()
         self.status_dot.set_state("processing")
         self.status_label.setText("Executing plan...")
-        self._start_thinking_indicator()
+        self._start_thinking_indicator("Executing plan")
         self._tts_worker = TTSWorker("Executing your plan now")
         self._tts_worker.start()
         self._execute_worker = ExecuteWorker(action)
@@ -1405,7 +1420,7 @@ class SaraFloatingWindow(QMainWindow):
         self.status_label.setText("Processing voice command...")
         self.mic_btn.setEnabled(False)
         self.mic_btn.setText("Processing...")
-        self._start_thinking_indicator()
+        self._start_thinking_indicator("Processing")
 
     def set_speaking(self, text: str = "") -> None:
         """Update the UI into the TTS/speaking state.
@@ -1439,6 +1454,19 @@ class SaraFloatingWindow(QMainWindow):
         else:
             self._hide_success()
 
+    def set_idle(self) -> None:
+        """Stop all recording animations and restore ready state.
+
+        Called by the runtime when it returns to idle (e.g. after [no_voice]
+        or conversation end).  Guaranteed to stop _mic_anim_timer and
+        _thinking_timer even if set_processing/set_speaking were never called.
+        """
+        self._reset_recording_ui()
+        self.mic_btn.setEnabled(True)
+        self.mic_btn.setText("Start Listening")
+        self.status_dot.set_state("idle")
+        self.status_label.setText("Ready")
+
     def _add_history_item(self, transcript: str, response: str, *, success: bool = True) -> None:
         ts = datetime.now().strftime("%H:%M:%S")
         icon = "\u2705" if success else "\u274C"  # green checkmark / red cross
@@ -1462,6 +1490,9 @@ class SaraFloatingWindow(QMainWindow):
         self._mic_anim_timer.stop()
         self._mic_opacity.setOpacity(1.0)
         self._apply_mic_idle_style()
+        # Clear any countdown text the last tick wrote ("🔴 Recording... Xs left")
+        if "\U0001F534" in self.mic_btn.text():
+            self.mic_btn.setText("Start Listening")
 
     def _tick_mic_animation(self) -> None:
         # Show elapsed/remaining time on the button text
@@ -1501,8 +1532,18 @@ class SaraFloatingWindow(QMainWindow):
             "QPushButton:disabled { background: #556f83; color: #d3dee6; }"
         )
 
-    def _start_thinking_indicator(self) -> None:
-        """Show animated thinking state while waiting for backend response."""
+    def _reset_recording_ui(self) -> None:
+        """Stop all recording/progress animations. Call in any terminal UI state."""
+        self._stop_mic_animation()
+        self._stop_thinking_indicator()
+
+    def _start_thinking_indicator(self, phase: str = "Sara is thinking") -> None:
+        """Activate the thinking indicator row (spinner + label).
+
+        Shows the spinner and label (hidden when idle; layout space always reserved
+        via retainSizeWhenHidden so no layout bounce occurs).
+        """
+        self._thinking_phase = phase
         self._thinking_frame = 0
         self.thinking_spinner.start()
         self.thinking_label.show()
@@ -1517,7 +1558,8 @@ class SaraFloatingWindow(QMainWindow):
 
     def _tick_thinking_animation(self) -> None:
         dots = "." * ((self._thinking_frame % 3) + 1)
-        self.thinking_label.setText(f"Sara is thinking{dots}")
+        phase = getattr(self, '_thinking_phase', 'Sara is thinking')
+        self.thinking_label.setText(f"{phase}{dots}")
         self._thinking_frame += 1
 
     def _show_error(self, message: str) -> None:
@@ -1556,7 +1598,7 @@ class SaraFloatingWindow(QMainWindow):
     def _on_upload_timeout(self) -> None:
         """Safety net: re-enable the UI if the upload thread never responded."""
         if self.uploader is not None and self.uploader.isRunning():
-            self._stop_thinking_indicator()
+            self._reset_recording_ui()
             self.mic_btn.setEnabled(True)
             self.mic_btn.setText("Start Listening")
             self.status_dot.set_state("error")
