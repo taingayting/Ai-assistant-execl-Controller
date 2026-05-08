@@ -668,14 +668,11 @@ class SaraFloatingWindow(QMainWindow):
         self.thinking_label.hide()
         self.thinking_spinner = SpinnerWidget()
 
-        # Reserve layout space for both widgets so hiding them doesn't cause
-        # the thinking_row to collapse and bounce surrounding widgets.
+        # Spinner's retained size (24 px) keeps ctrl_bar's height constant so
+        # the outer layout never shifts when the thinking row appears/disappears.
         _sp = self.thinking_spinner.sizePolicy()
         _sp.setRetainSizeWhenHidden(True)
         self.thinking_spinner.setSizePolicy(_sp)
-        _sp = self.thinking_label.sizePolicy()
-        _sp.setRetainSizeWhenHidden(True)
-        self.thinking_label.setSizePolicy(_sp)
 
         self.success_label = QLabel("")
         self.success_label.setWordWrap(True)
@@ -777,7 +774,19 @@ class SaraFloatingWindow(QMainWindow):
             "QListWidget::item:selected { background: #28516a; }"
         )
 
-        layout.addWidget(self.mic_btn)
+        # Fixed-height control bar: mic button + status row + thinking row.
+        # Wrapping these three items in a single QFrame gives them a shared
+        # background and prevents the outer layout from shifting when the
+        # thinking row shows/hides.  The spinner's retainSizeWhenHidden keeps
+        # the bar's height constant so nothing below it ever moves.
+        ctrl_bar = QFrame()
+        ctrl_bar.setObjectName("ctrlBar")
+        ctrl_bar.setStyleSheet("#ctrlBar { background: #111C27; }")
+        ctrl_layout = QVBoxLayout(ctrl_bar)
+        ctrl_layout.setContentsMargins(0, 0, 0, 0)
+        ctrl_layout.setSpacing(4)
+
+        ctrl_layout.addWidget(self.mic_btn)
 
         status_row = QHBoxLayout()
         status_row.setContentsMargins(0, 0, 0, 0)
@@ -789,7 +798,7 @@ class SaraFloatingWindow(QMainWindow):
         self.dev_toggle.setStyleSheet("color: #7A98AE; font-size: 10px;")
         self.dev_toggle.toggled.connect(self._toggle_dev_mode)
         status_row.addWidget(self.dev_toggle)
-        layout.addLayout(status_row)
+        ctrl_layout.addLayout(status_row)
 
         thinking_row = QHBoxLayout()
         thinking_row.setContentsMargins(0, 0, 0, 0)
@@ -797,7 +806,9 @@ class SaraFloatingWindow(QMainWindow):
         thinking_row.addWidget(self.thinking_spinner)
         thinking_row.addWidget(self.thinking_label)
         thinking_row.addStretch(1)
-        layout.addLayout(thinking_row)
+        ctrl_layout.addLayout(thinking_row)
+
+        layout.addWidget(ctrl_bar)
 
         layout.addWidget(self.success_label)
         layout.addWidget(self.error_label)
@@ -1261,8 +1272,8 @@ class SaraFloatingWindow(QMainWindow):
                 ai_message = "Action executed successfully."
         self._hide_error()
         self._hide_suggestions()
-        self._show_success(ai_message)
-        self.response_view.setPlainText(ai_message)
+        self._show_success("Done")           # banner: short status only
+        self.response_view.setPlainText(ai_message)   # full message here
         self._add_history_item(transcript, ai_message, success=True)
         if ai_message:
             self.status_dot.set_state("speaking")
