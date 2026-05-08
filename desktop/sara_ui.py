@@ -1086,8 +1086,8 @@ class SaraFloatingWindow(QMainWindow):
         self.mic_btn.setEnabled(False)
         self.mic_btn.setText("Listening")
         self.status_dot.set_state("listening")
-        self.status_label.setText(f"Recording for up to {int(RECORD_SECONDS)}s")
-        self.transcript_view.setPlainText("Listening...")
+        self.status_label.setText("Listening...")
+        self.transcript_view.setPlainText("Listening... speak now")
         self._start_mic_animation()
 
         self.recorder = RecorderThread(seconds=RECORD_SECONDS)
@@ -1097,13 +1097,14 @@ class SaraFloatingWindow(QMainWindow):
         self.recorder.start()
 
     def on_live_transcript(self, text: str) -> None:
-        self.transcript_view.setPlainText(text)
+        pass  # batch STT: final transcript arrives after upload, not during recording
 
     def on_recording_finished(self, wav_bytes: bytes) -> None:
         self._stop_mic_animation()
-        self.mic_btn.setText("Processing...")
+        self.mic_btn.setText("Transcribing...")
         self.status_dot.set_state("processing")
-        self.status_label.setText("Processing voice command...")
+        self.status_label.setText("Transcribing...")
+        self.transcript_view.setPlainText("Transcribing...")
         self._start_thinking_indicator()
         # Play TTS "working" message while waiting for backend (non-blocking)
         self._tts_worker = TTSWorker("Working on your Excel command")
@@ -1190,7 +1191,7 @@ class SaraFloatingWindow(QMainWindow):
             preview = self._describe_single_action(action)
             self.response_view.setPlainText(f"Executing: {preview}")
             self.status_dot.set_state("processing")
-            self.status_label.setText("Executing command...")
+            self.status_label.setText("Executing...")
             self._start_thinking_indicator()
             self._pending_result = result
             self._execute_worker = ExecuteWorker(action)
@@ -1243,27 +1244,19 @@ class SaraFloatingWindow(QMainWindow):
                 ai_message = exec_result
             else:
                 ai_message = "Action executed successfully."
-        self.status_dot.set_state("idle")
-        self.status_label.setText(
-            "\U0001F50A Sara is speaking..." if ai_message else "Command completed"
-        )
         self._hide_error()
         self._hide_suggestions()
         self._show_success(ai_message)
         self.response_view.setPlainText(ai_message)
         self._add_history_item(transcript, ai_message, success=True)
-        # Speak result via TTS
         if ai_message:
+            self.status_dot.set_state("speaking")
+            self.status_label.setText("Speaking...")
             self._tts_worker = TTSWorker(ai_message)
+            self._tts_worker.finished.connect(self._show_done_state)
             self._tts_worker.start()
-            QTimer.singleShot(
-                4000,
-                lambda: (
-                    self.status_label.setText("Ready")
-                    if self.status_label.text().startswith("\U0001F50A")
-                    else None
-                ),
-            )
+        else:
+            self._show_done_state()
 
     def _on_plan_execute_clicked(self) -> None:
         """User confirmed multi-step plan execution."""
@@ -1288,6 +1281,17 @@ class SaraFloatingWindow(QMainWindow):
         self.status_label.setText("Plan cancelled")
         self.response_view.setPlainText("Plan cancelled by user.")
         self._add_history_item("(cancelled plan)", "User declined execution", success=False)
+
+    def _show_done_state(self) -> None:
+        """Briefly show Done after a command completes, then transition to Ready."""
+        self.status_dot.set_state("done")
+        self.status_label.setText("Done")
+        QTimer.singleShot(1500, self._show_ready_state)
+
+    def _show_ready_state(self) -> None:
+        """Restore idle/ready state after Done is shown."""
+        self.status_dot.set_state("idle")
+        self.status_label.setText("Ready")
 
     @staticmethod
     def _format_plan_preview(action: dict) -> str:
@@ -1413,7 +1417,7 @@ class SaraFloatingWindow(QMainWindow):
         """
         self._stop_mic_animation()
         self._stop_thinking_indicator()
-        self.status_dot.set_state("processing")   # reuse the orange processing dot
+        self.status_dot.set_state("speaking")
         self.status_label.setText("Speaking...")
         self.mic_btn.setEnabled(False)
         self.mic_btn.setText("Speaking...")
