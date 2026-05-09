@@ -1038,6 +1038,11 @@ _COMMAND_PREFIX_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'^(list|show)\s+(?:all\s+)?sheets?\b', re.IGNORECASE), 'list sheets'),
     # "undo" family
     (re.compile(r'^undo\b', re.IGNORECASE), 'undo'),
+    # "I do" / "unto" / "and do" → "undo" — STT phonetic corruptions of "undo".
+    # Restricted to standalone utterances so "I do the work" is never touched.
+    (re.compile(r'^i\s+do\s*$', re.IGNORECASE), 'undo'),
+    (re.compile(r'^unto\s*$', re.IGNORECASE), 'undo'),
+    (re.compile(r'^and\s+do\s*$', re.IGNORECASE), 'undo'),
     # "merge cells" family
     (re.compile(r'^(merge|combine)\s+(?:the\s+)?cells?\b', re.IGNORECASE), 'merge cells'),
     # "freeze / unfreeze panes"

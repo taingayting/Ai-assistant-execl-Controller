@@ -44,7 +44,6 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QFrame,
     QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -559,7 +558,6 @@ class SaraFloatingWindow(QMainWindow):
         self._mic_anim_timer = QTimer(self)
         self._mic_anim_timer.timeout.connect(self._tick_mic_animation)
         self._mic_anim_frame = 0
-        self._mic_opacity = QGraphicsOpacityEffect(self)
 
         self._thinking_timer = QTimer(self)
         self._thinking_timer.timeout.connect(self._tick_thinking_animation)
@@ -655,8 +653,6 @@ class SaraFloatingWindow(QMainWindow):
         self.mic_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mic_btn.setFixedHeight(44)
         self._apply_mic_idle_style()
-        self.mic_btn.setGraphicsEffect(self._mic_opacity)
-        self._mic_opacity.setOpacity(1.0)
         self.mic_btn.clicked.connect(self.start_recording)
 
         self.status_dot = StatusDot()
@@ -1449,7 +1445,7 @@ class SaraFloatingWindow(QMainWindow):
         self.mic_btn.setText("Speaking...")
         if text:
             self.response_view.setPlainText(text)
-            self._show_success(text)
+            self._show_success("Done")
 
     def set_response(self, text: str) -> None:
         """Display Sara's response text and restore the idle button state."""
@@ -1461,7 +1457,7 @@ class SaraFloatingWindow(QMainWindow):
         self.status_label.setText("Ready")
         self.response_view.setPlainText(text or "")
         if text:
-            self._show_success(text)
+            self._show_success("Done")
         else:
             self._hide_success()
 
@@ -1499,7 +1495,6 @@ class SaraFloatingWindow(QMainWindow):
 
     def _stop_mic_animation(self) -> None:
         self._mic_anim_timer.stop()
-        self._mic_opacity.setOpacity(1.0)
         self._apply_mic_idle_style()
         # Clear any countdown text the last tick wrote ("🔴 Recording... Xs left")
         if "\U0001F534" in self.mic_btn.text():
@@ -1511,10 +1506,9 @@ class SaraFloatingWindow(QMainWindow):
         remaining = max(0, RECORD_SECONDS - elapsed)
         self.mic_btn.setText(f"\U0001F534 Recording... {remaining:.0f}s left")
 
-        # Alternate glow + opacity for a subtle pulse effect.
+        # Alternate between two color states for a pulse effect.
         phase = self._mic_anim_frame % 4
         if phase in (0, 1):
-            self._mic_opacity.setOpacity(1.0)
             self.mic_btn.setStyleSheet(
                 "QPushButton {"
                 "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #19B6CD, stop:1 #4B8DBB);"
@@ -1523,7 +1517,6 @@ class SaraFloatingWindow(QMainWindow):
                 "QPushButton:disabled { background: #5C7D93; color: #E6F4FF; border: 1px solid #A5DBFF; }"
             )
         else:
-            self._mic_opacity.setOpacity(0.72)
             self.mic_btn.setStyleSheet(
                 "QPushButton {"
                 "background: qlineargradient(x1:0,y1:0,x2:1,y2:0, stop:0 #1198AA, stop:1 #356F98);"

@@ -30,6 +30,7 @@ from llm_parser import parse_with_llm, generate_suggestions
 from llm_router import route_llm
 from excel_controller import execute_action
 from memory import memory
+from pipeline_sanitizer import correct_transcript, sanitize_memory_value
 from planner import Planner
 from tools.tool_registry import registry as tool_registry, register_default_excel_tools
 from error_handler import ErrorHandler
@@ -37,6 +38,30 @@ import workflow_router
 import workflow_engine
 
 log = logging.getLogger('agent')
+
+
+def _enrich_text_with_context(text: str) -> str:
+    """Prepend active memory state so the LLM has file/sheet/column context.
+
+    Produces the same ``[file:X sheet:Y columns:A,B]`` prefix as
+    ``AssistantRuntime._enrich_with_context`` so both pipelines (run_sara.py
+    and desktop UI) give the LLM identical context.  The heuristic parser
+    in llm_parser already strips this prefix before token-based checks, so
+    deterministic commands like ``undo`` are unaffected.
+    """
+    snap = memory.snapshot()
+    parts: list[str] = []
+    if snap.get('active_file'):
+        parts.append(f"file:{sanitize_memory_value(snap['active_file'])}")
+    if snap.get('active_sheet'):
+        parts.append(f"sheet:{sanitize_memory_value(snap['active_sheet'])}")
+    headers = snap.get('active_headers') or []
+    if headers:
+        safe_headers = ','.join(sanitize_memory_value(h) for h in headers)
+        parts.append(f"columns:{safe_headers}")
+    if parts:
+        return f"[{' '.join(parts)}] {text}"
+    return text
 
 
 # --------------- Result container ---------------
@@ -118,8 +143,13 @@ class Agent:
             executed.
         """
         log.info('handle_text: text=%r  auto_execute=%s', text[:120], auto_execute)
+        corrected = correct_transcript(text)
+        if corrected != text:
+            log.info('handle_text: transcript corrected %r → %r', text[:80], corrected[:80])
+        text = corrected
+        enriched = _enrich_text_with_context(text)
         try:
-            action = route_llm(text)
+            action = route_llm(enriched)
         except Exception as exc:
             log.error('[Pipeline] handle_text: route_llm raised unexpectedly: %s', exc)
             failure = ErrorHandler.classify_exception(exc)
@@ -193,7 +223,13 @@ class Agent:
                 steps = action.get('steps')
                 if isinstance(steps, list) and steps and isinstance(steps[0], dict):
                     action_filename = steps[0].get('filename')
-        resolved = self._resolve_filename(filename or action_filename)
+        # For open_file the action's embedded filename IS the target — it must
+        # win over the caller's active-file hint so "open file server" opens
+        # server.xlsx regardless of which file is currently active in memory.
+        if isinstance(action, dict) and action.get('type') == 'open_file' and action_filename:
+            resolved = self._resolve_filename(action_filename)
+        else:
+            resolved = self._resolve_filename(filename or action_filename)
         filepath = os.path.join(self.files_dir, resolved)
 
         # 1. Route

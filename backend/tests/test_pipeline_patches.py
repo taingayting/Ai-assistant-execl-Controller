@@ -10774,5 +10774,449 @@ class TestP36VoiceReliability(unittest.TestCase):
         self.assertEqual(act['column'], 'B')
 
 
+class TestP45FreezePanFilterVoice(unittest.TestCase):
+    """Voice safety regression tests for P45.
+
+    Covers four STT-to-action bugs reported from real mic sessions:
+    1. freeze pan/pen/pants  → freeze_panes, never format_cells
+    2. filter column A Lisa  → filter_table column A value Lisa
+    3. filter color A Lisa   → filter_table column A value Lisa
+    4. filter column be 40   → filter_table column B value 40
+    5. sort by be descending → sort_range column B descending
+    6. typed BE must remain BE (no voice correction on uppercase ending)
+    7. color B2 red / fill column B → formatting protected (not mistaken for filter)
+    """
+
+    # ── 1. freeze pan / pen / pants → freeze_panes ──────────────────────────
+
+    def test_01_freeze_pan_corrects_to_freeze_panes(self):
+        """'freeze pan' must correct to 'freeze panes'."""
+        r = _pipeline('freeze pan')
+        self.assertIn('freeze panes', r['corrected'].lower(),
+                      f"Expected 'freeze panes' in corrected: {r['corrected']!r}")
+
+    def test_02_freeze_pan_intent_is_freeze_panes(self):
+        """'freeze pan' must have intent freeze_panes."""
+        r = _pipeline('freeze pan')
+        self.assertEqual(r['intent'], 'freeze_panes',
+                         f"Expected freeze_panes, got {r['intent']!r}")
+
+    def test_03_freeze_pan_action_is_freeze_panes(self):
+        """'freeze pan' must produce freeze_panes action, never format_cells."""
+        r = _pipeline('freeze pan')
+        act = r['action']
+        self.assertIsNotNone(act, "Expected action for 'freeze pan'")
+        self.assertEqual(act.get('type'), 'freeze_panes',
+                         f"Expected freeze_panes, got {act.get('type')!r}")
+        self.assertNotEqual(act.get('type'), 'format_cells',
+                            "'freeze pan' must NEVER route to format_cells")
+
+    def test_04_freeze_pen_corrects_to_freeze_panes(self):
+        """'freeze pen' must correct to 'freeze panes'."""
+        r = _pipeline('freeze pen')
+        self.assertIn('freeze panes', r['corrected'].lower(),
+                      f"Expected 'freeze panes' in corrected: {r['corrected']!r}")
+
+    def test_05_freeze_pen_action_is_freeze_panes(self):
+        """'freeze pen' must produce freeze_panes action, never format_cells."""
+        r = _pipeline('freeze pen')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'freeze_panes',
+                         f"Expected freeze_panes, got {act.get('type')!r}")
+
+    def test_06_freeze_pants_corrects_to_freeze_panes(self):
+        """'freeze pants' must correct to 'freeze panes'."""
+        r = _pipeline('freeze pants')
+        self.assertIn('freeze panes', r['corrected'].lower(),
+                      f"Expected 'freeze panes' in corrected: {r['corrected']!r}")
+
+    def test_07_freeze_pants_action_is_freeze_panes(self):
+        """'freeze pants' must produce freeze_panes action, never format_cells."""
+        r = _pipeline('freeze pants')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'freeze_panes',
+                         f"Expected freeze_panes, got {act.get('type')!r}")
+
+    def test_08_freeze_pants_not_format_cells(self):
+        """'freeze pants' must NEVER route to format_cells (regression guard)."""
+        r = _pipeline('freeze pants')
+        act = r['action']
+        if act:
+            self.assertNotEqual(act.get('type'), 'format_cells',
+                                "'freeze pants' must never route to format_cells")
+
+    # ── 2. filter column A Lisa → filter_table ───────────────────────────────
+
+    def test_09_filter_column_A_text_value_intent(self):
+        """'filter column A Lisa' must have intent filter_table."""
+        r = _pipeline('filter column A Lisa')
+        self.assertEqual(r['intent'], 'filter_table',
+                         f"Expected filter_table, got {r['intent']!r}")
+
+    def test_10_filter_column_A_text_value_action(self):
+        """'filter column A Lisa' → filter_table column=A value=Lisa."""
+        r = _pipeline('filter column A Lisa')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'filter_table')
+        self.assertEqual(act.get('column', '').upper(), 'A')
+        self.assertIn('Lisa', act.get('value', ''),
+                      f"Expected 'Lisa' in value, got {act.get('value')!r}")
+
+    def test_11_filter_column_A_text_not_formatting(self):
+        """'filter column A Lisa' must NOT route to format_cells."""
+        r = _pipeline('filter column A Lisa')
+        act = r['action']
+        if act:
+            self.assertNotEqual(act.get('type'), 'format_cells',
+                                "'filter column A Lisa' must not route to formatting")
+
+    # ── 3. filter color A Lisa → filter_table ────────────────────────────────
+
+    def test_12_filter_color_A_Lisa_corrects_column(self):
+        """'filter color A Lisa' must correct 'color' to 'column'."""
+        r = _pipeline('filter color A Lisa')
+        self.assertIn('filter column', r['corrected'].lower(),
+                      f"Expected 'filter column' in corrected: {r['corrected']!r}")
+
+    def test_13_filter_color_A_Lisa_intent(self):
+        """'filter color A Lisa' must have intent filter_table."""
+        r = _pipeline('filter color A Lisa')
+        self.assertEqual(r['intent'], 'filter_table',
+                         f"Expected filter_table, got {r['intent']!r}")
+
+    def test_14_filter_color_A_Lisa_action(self):
+        """'filter color A Lisa' → filter_table column=A value=Lisa."""
+        r = _pipeline('filter color A Lisa')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'filter_table')
+        self.assertEqual(act.get('column', '').upper(), 'A')
+        self.assertIn('Lisa', act.get('value', ''))
+
+    # ── 4. filter column be 40 → filter_table column B ───────────────────────
+
+    def test_15_filter_column_be_corrects_to_B(self):
+        """'filter column be 40' — 'be' (voice) must become 'B'."""
+        r = _pipeline('filter column be 40')
+        self.assertIn('column B', r['corrected'],
+                      f"Expected 'column B' in corrected: {r['corrected']!r}")
+
+    def test_16_filter_column_be_40_intent(self):
+        """'filter column be 40' must have intent filter_table."""
+        r = _pipeline('filter column be 40')
+        self.assertEqual(r['intent'], 'filter_table')
+
+    def test_17_filter_column_be_40_action(self):
+        """'filter column be 40' → filter_table column=B value=40."""
+        r = _pipeline('filter column be 40')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'filter_table')
+        self.assertEqual(act.get('column', '').upper(), 'B')
+        self.assertEqual(str(act.get('value', '')), '40')
+
+    # ── 5. sort by be descending → sort column B ─────────────────────────────
+
+    def test_18_sort_by_be_descending_corrects_to_B(self):
+        """'sort by be descending' — 'be' (voice) must become 'B'."""
+        r = _pipeline('sort by be descending')
+        self.assertIn('by B', r['corrected'],
+                      f"Expected 'by B' in corrected: {r['corrected']!r}")
+
+    def test_19_sort_by_be_descending_action(self):
+        """'sort by be descending' → sort_range column=B ascending=False."""
+        r = _pipeline('sort by be descending')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'sort_range')
+        self.assertEqual(act.get('column', '').upper(), 'B')
+        self.assertFalse(act.get('ascending', True))
+
+    # ── 6. typed BE must remain BE (no voice substitution on uppercase E) ────
+
+    def test_20_typed_sort_by_BE_unchanged(self):
+        """Typed 'sort by BE descending' — uppercase E must NOT be corrected."""
+        r = _pipeline('sort by BE descending')
+        self.assertIn('BE', r['corrected'],
+                      f"Typed 'BE' must not be changed, corrected={r['corrected']!r}")
+
+    def test_21_typed_color_column_BE_unchanged(self):
+        """Typed 'color column BE green' — uppercase E must NOT be corrected."""
+        r = _pipeline('color column BE green')
+        self.assertIn('BE', r['corrected'],
+                      f"Typed 'BE' must not be changed, corrected={r['corrected']!r}")
+
+    # ── 7. protected formatting commands ─────────────────────────────────────
+
+    def test_22_color_B2_red_is_formatting(self):
+        """'color B2 red' must remain format_cells (not filter_table)."""
+        r = _pipeline('color B2 red')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'format_cells',
+                         f"Expected format_cells, got {act.get('type')!r}")
+
+    def test_23_fill_column_B_with_blue_is_formatting(self):
+        """'fill column B with blue' must remain format_cells (not filter_table)."""
+        r = _pipeline('fill column B with blue')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'format_cells',
+                         f"Expected format_cells, got {act.get('type')!r}")
+
+    def test_24_color_B2_red_not_filter(self):
+        """'color B2 red' must NOT route to filter_table."""
+        r = _pipeline('color B2 red')
+        act = r['action']
+        if act:
+            self.assertNotEqual(act.get('type'), 'filter_table',
+                                "'color B2 red' must not route to filter")
+
+    def test_25_fill_column_B_not_filter(self):
+        """'fill column B with blue' must NOT route to filter_table."""
+        r = _pipeline('fill column B with blue')
+        act = r['action']
+        if act:
+            self.assertNotEqual(act.get('type'), 'filter_table',
+                                "'fill column B with blue' must not route to filter")
+
+
+class TestP45AgentHandleTextCorrection(unittest.TestCase):
+    """Verify correct_transcript is applied inside agent.handle_text().
+
+    The upload-audio API path goes through agent.handle_text() which previously
+    called route_llm() with the raw STT transcript (no correction).  P45 adds
+    correct_transcript() before route_llm() so voice transcription errors like
+    'freeze pan', 'filter column be', 'by be' are fixed on ALL code paths.
+    """
+
+    def _agent_heuristic(self, raw: str) -> dict:
+        """Run raw text through agent.handle_text() with heuristic-only routing."""
+        from unittest.mock import patch as _patch
+        received = {}
+
+        def _fake_route(text, **kw):
+            received['text'] = text
+            from llm_parser import _heuristic_natural_language_parse
+            result = _heuristic_natural_language_parse(text)
+            if result is None:
+                result = {'type': 'unknown'}
+            result['_router_source'] = 'heuristic'
+            return result
+
+        import agent as _agent_mod
+        import tempfile
+        with _patch.object(_agent_mod, 'route_llm', side_effect=_fake_route):
+            with tempfile.TemporaryDirectory() as _td:
+                ag = _agent_mod.Agent(files_dir=_td)
+                ag_result = ag.handle_text(raw)
+
+        return {'corrected': received.get('text', raw), 'action': ag_result.action}
+
+    def test_01_agent_corrects_freeze_pan(self):
+        """agent.handle_text('freeze pan') must pass 'freeze panes' to route_llm."""
+        r = self._agent_heuristic('freeze pan')
+        self.assertIn('freeze panes', r['corrected'].lower(),
+                      f"Expected correction, got {r['corrected']!r}")
+
+    def test_02_agent_corrects_freeze_pen(self):
+        """agent.handle_text('freeze pen') must pass 'freeze panes' to route_llm."""
+        r = self._agent_heuristic('freeze pen')
+        self.assertIn('freeze panes', r['corrected'].lower())
+
+    def test_03_agent_corrects_freeze_pants(self):
+        """agent.handle_text('freeze pants') must pass 'freeze panes' to route_llm."""
+        r = self._agent_heuristic('freeze pants')
+        self.assertIn('freeze panes', r['corrected'].lower())
+
+    def test_04_agent_freeze_pan_action(self):
+        """agent.handle_text('freeze pan') must return freeze_panes action."""
+        r = self._agent_heuristic('freeze pan')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'freeze_panes',
+                         f"Expected freeze_panes action, got {act!r}")
+
+    def test_05_agent_corrects_filter_column_be(self):
+        """agent.handle_text('filter column be 40') must correct 'be' → 'B'."""
+        r = self._agent_heuristic('filter column be 40')
+        self.assertIn('column B', r['corrected'],
+                      f"Expected 'column B' in corrected: {r['corrected']!r}")
+
+    def test_06_agent_filter_column_be_action(self):
+        """agent.handle_text('filter column be 40') must return filter_table action."""
+        r = self._agent_heuristic('filter column be 40')
+        act = r['action']
+        self.assertIsNotNone(act)
+        self.assertEqual(act.get('type'), 'filter_table')
+        self.assertEqual(act.get('column', '').upper(), 'B')
+
+
+class TestP46UiPipelineAlignment(unittest.TestCase):
+    """Mandatory 16-command matrix for UI pipeline alignment (P46).
+
+    Verifies that every spoken command that works in run_sara.py also produces
+    the correct correction and action type through the UI path
+    (correct_transcript → heuristic route).
+    """
+
+    # ── Correction checks ────────────────────────────────────────────────────
+
+    def test_01_correct_undo_unchanged(self):
+        """'undo' needs no correction."""
+        from pipeline_sanitizer import correct_transcript
+        self.assertEqual(correct_transcript('undo'), 'undo')
+
+    def test_02_correct_i_do_to_undo(self):
+        """'I do' (standalone) → 'undo'."""
+        from pipeline_sanitizer import correct_transcript
+        self.assertEqual(correct_transcript('I do'), 'undo')
+
+    def test_03_correct_unto_to_undo(self):
+        """'unto' (standalone) → 'undo'."""
+        from pipeline_sanitizer import correct_transcript
+        self.assertEqual(correct_transcript('unto'), 'undo')
+
+    def test_04_correct_and_do_to_undo(self):
+        """'and do' (standalone) → 'undo'."""
+        from pipeline_sanitizer import correct_transcript
+        self.assertEqual(correct_transcript('and do'), 'undo')
+
+    def test_05_correct_freeze_pane(self):
+        """'freeze pane' → 'freeze panes'."""
+        from pipeline_sanitizer import correct_transcript
+        self.assertIn('freeze panes', correct_transcript('freeze pane').lower())
+
+    def test_06_i_do_mid_sentence_not_corrected(self):
+        """'I do the work' must NOT become 'undo the work' — guard test."""
+        from pipeline_sanitizer import correct_transcript
+        result = correct_transcript('I do the work')
+        self.assertNotIn('undo', result.lower(),
+                         f"Mid-sentence 'I do' was incorrectly rewritten: {result!r}")
+
+    # ── Undo voice variants — action routing ─────────────────────────────────
+
+    def test_07_undo_routes_undo(self):
+        """'undo' → action type undo."""
+        r = _pipeline('undo')
+        self.assertIsNotNone(r['action'])
+        self.assertEqual(r['action'].get('type'), 'undo')
+
+    def test_08_i_do_routes_undo(self):
+        """'I do' STT corruption → undo after correction."""
+        r = _pipeline('I do')
+        self.assertIsNotNone(r['action'], f"Expected undo action, got None (corrected={r['corrected']!r})")
+        self.assertEqual(r['action'].get('type'), 'undo',
+                         f"Expected undo, got {r['action']!r}")
+
+    def test_09_unto_routes_undo(self):
+        """'unto' STT corruption → undo after correction."""
+        r = _pipeline('unto')
+        self.assertIsNotNone(r['action'], f"Expected undo action, got None (corrected={r['corrected']!r})")
+        self.assertEqual(r['action'].get('type'), 'undo',
+                         f"Expected undo, got {r['action']!r}")
+
+    def test_10_and_do_routes_undo(self):
+        """'and do' STT corruption → undo after correction."""
+        r = _pipeline('and do')
+        self.assertIsNotNone(r['action'], f"Expected undo action, got None (corrected={r['corrected']!r})")
+        self.assertEqual(r['action'].get('type'), 'undo',
+                         f"Expected undo, got {r['action']!r}")
+
+    # ── All 16 mandatory commands — action type ──────────────────────────────
+
+    def test_11_open_excel(self):
+        """'open excel' → open_excel_app."""
+        r = _pipeline('open excel')
+        self.assertEqual(r['action'].get('type'), 'open_excel_app',
+                         f"Got {r['action']!r}")
+
+    def test_12_open_file_server(self):
+        """'open file server' → open_file with filename server.xlsx."""
+        r = _pipeline('open file server')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'open_file', f"Got {act!r}")
+        self.assertEqual(act.get('filename', '').lower(), 'server.xlsx',
+                         f"Got filename {act.get('filename')!r}")
+
+    def test_13_open_file_background(self):
+        """'open file background' → open_file with filename background.xlsx."""
+        r = _pipeline('open file background')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'open_file', f"Got {act!r}")
+        self.assertEqual(act.get('filename', '').lower(), 'background.xlsx',
+                         f"Got filename {act.get('filename')!r}")
+
+    def test_14_add_row_john_90(self):
+        """'add row John 90' → add_row."""
+        r = _pipeline('add row John 90')
+        self.assertEqual(r['action'].get('type'), 'add_row', f"Got {r['action']!r}")
+
+    def test_15_write_cell_c2_18(self):
+        """'write cell C2 18' → write_cell at C2."""
+        r = _pipeline('write cell C2 18')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'write_cell', f"Got {act!r}")
+        self.assertEqual(act.get('cell', '').upper(), 'C2',
+                         f"Got cell {act.get('cell')!r}")
+
+    def test_16_freeze_pane(self):
+        """'freeze pane' → freeze_panes after correction."""
+        r = _pipeline('freeze pane')
+        self.assertEqual(r['action'].get('type'), 'freeze_panes',
+                         f"Got {r['action']!r}")
+
+    def test_17_filter_column_a_lisa(self):
+        """'filter column A Lisa' → filter_table col=A val=Lisa."""
+        r = _pipeline('filter column A Lisa')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'filter_table', f"Got {act!r}")
+        self.assertEqual(act.get('column', '').upper(), 'A')
+        self.assertEqual(act.get('value', '').lower(), 'lisa')
+
+    def test_18_sort_by_b_descending(self):
+        """'sort by B descending' → sort_range col=B ascending=False."""
+        r = _pipeline('sort by B descending')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'sort_range', f"Got {act!r}")
+        self.assertEqual(act.get('column', '').upper(), 'B',
+                         f"Got column {act.get('column')!r}")
+        self.assertFalse(act.get('ascending', True),
+                         "Expected ascending=False for 'descending'")
+
+    def test_19_color_b2_red(self):
+        """'color B2 red' → format_cells."""
+        r = _pipeline('color B2 red')
+        act = r['action']
+        self.assertIsNotNone(act, "Expected format_cells action, got None")
+        self.assertEqual(act.get('type'), 'format_cells', f"Got {act!r}")
+
+    def test_20_fill_column_b_blue(self):
+        """'fill column B blue' → format_cells."""
+        r = _pipeline('fill column B blue')
+        act = r['action']
+        self.assertIsNotNone(act, "Expected format_cells action, got None")
+        self.assertEqual(act.get('type'), 'format_cells', f"Got {act!r}")
+
+    def test_21_switch_sheet_report(self):
+        """'switch sheet report' → switch_sheet sheet_name containing 'report'."""
+        r = _pipeline('switch sheet report')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'switch_sheet', f"Got {act!r}")
+        self.assertIn('report', act.get('sheet_name', '').lower(),
+                      f"Got sheet_name {act.get('sheet_name')!r}")
+
+    def test_22_delete_sheet_report(self):
+        """'delete sheet report' → delete_sheet sheet_name containing 'report'."""
+        r = _pipeline('delete sheet report')
+        act = r['action']
+        self.assertEqual(act.get('type'), 'delete_sheet', f"Got {act!r}")
+        self.assertIn('report', act.get('sheet_name', '').lower(),
+                      f"Got sheet_name {act.get('sheet_name')!r}")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
