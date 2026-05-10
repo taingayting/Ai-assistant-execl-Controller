@@ -971,14 +971,22 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bdegrease\b(?=\s+(?:font[\s-])?size\b)', re.IGNORECASE), 'decrease'),
 
     # ══ "sum" command: additional STT mishears ════════════════════════════════
-    # "sam B2:B5" / "sam column B" → "sum ..." — "sam" is a phonetic variant of "sum".
-    # Restricted to cell-ref or "column" context to avoid clobbering the name "Sam".
-    (re.compile(r'\bsam\b(?=\s+(?:[A-Za-z]\d+|column)\b)', re.IGNORECASE), 'sum'),
-    # "sun column B" → "sum column B" — "sun" is a phonetic variant of "sum".
-    # Restricted to cell-ref or "column" context to avoid clobbering the noun "sun".
-    (re.compile(r'\bsun\b(?=\s+(?:[A-Za-z]\d+|column)\b)', re.IGNORECASE), 'sum'),
-    # "some column B" → "sum column B" (the existing "some" rule covers cell refs only).
-    (re.compile(r'\bsome\b(?=\s+column\b)', re.IGNORECASE), 'sum'),
+    # "sam B2:B5" / "sam column B" / "sam row 6" → "sum ..." — phonetic variant.
+    # Restricted to cell-ref, "column", or "row" context to avoid clobbering the name "Sam"
+    # (e.g. "add row Sam 6": "Sam" is followed by "6", not "row"/"column" → safe).
+    (re.compile(r'\bsam\b(?=\s+(?:[A-Za-z]\d+|column|row)\b)', re.IGNORECASE), 'sum'),
+    # "sun column B" / "sun row 6" → "sum ..." — phonetic variant.
+    (re.compile(r'\bsun\b(?=\s+(?:[A-Za-z]\d+|column|row)\b)', re.IGNORECASE), 'sum'),
+    # "some column B" / "some row 6" → "sum ..." — restricted to formula contexts.
+    # "write cell A1 some text": "some" is followed by "text", not "row"/"column" → safe.
+    (re.compile(r'\bsome\b(?=\s+(?:column|row)\b)', re.IGNORECASE), 'sum'),
+    # "sum row six" → "sum row 6" — digit-word normalisation for the sum-row context.
+    # The heuristic calculate_row_sum parser requires \d+; word-form digits would miss it.
+    # Runs AFTER the phonetic rules above: "sam row six" → "sum row six" → "sum row 6".
+    (re.compile(
+        r'\bsum\s+row\s+(one|won|two|to|too|three|four|five|six|seven|eight|nine)\b',
+        re.IGNORECASE,
+    ), lambda m: f'sum row {_ROW_NUM_WORDS[m.group(1).lower()]}'),
 
     # ══ "fill" STT mishears at utterance start ════════════════════════════════
     # "fear/feel/field row 2 with red" → "fill row 2 with red"

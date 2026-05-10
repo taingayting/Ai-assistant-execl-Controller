@@ -11535,5 +11535,129 @@ class TestP48VoiceSafety(unittest.TestCase):
         self.assertEqual(r['intent'], 'format_cells', repr(r))
 
 
+# ---------------------------------------------------------------------------
+# P49 — sum row / sum column STT safety (some/sam/sun phonetic row context)
+# ---------------------------------------------------------------------------
+
+def _action(raw: str):
+    """Return (corrected, intent, action_type) for *raw* through the full pipeline."""
+    from pipeline_sanitizer import correct_transcript, detect_command_intent, check_command_slots
+    from llm_parser import _heuristic_natural_language_parse  # type: ignore
+    c = correct_transcript(raw)
+    i = detect_command_intent(c)
+    s = check_command_slots(i, c)
+    a = None if s else _heuristic_natural_language_parse(c)
+    return c, i, (a.get('type') if isinstance(a, dict) else None)
+
+
+class TestP49SumRowColumnSafety(unittest.TestCase):
+    """Mandatory tests for sum-row/column phonetic safety (P49).
+
+    sum/some/sam/sun before row → calculate_row_sum (never delete_row / add_row).
+    sum/some/sam/sun before column → calculate_sum intent (never format_cells).
+    Regressions: add_row, write_cell, find_replace, delete_row, format_cells unchanged.
+    """
+
+    # ── SUM ROW: positive cases ────────────────────────────────────────────
+
+    def test_sum_row_6_baseline(self):
+        """'sum row 6' → calculate_row_sum (baseline)."""
+        _, _, atype = _action('sum row 6')
+        self.assertEqual(atype, 'calculate_row_sum')
+
+    def test_some_row_6_corrects_to_sum(self):
+        """'some row 6' → corrected to 'sum row 6' → calculate_row_sum."""
+        c, _, atype = _action('some row 6')
+        self.assertIn('sum', c, repr(c))
+        self.assertEqual(atype, 'calculate_row_sum')
+
+    def test_sam_row_six_corrects_to_sum(self):
+        """'sam row six' → corrected to 'sum row 6' (word digit normalised) → calculate_row_sum."""
+        c, _, atype = _action('sam row six')
+        self.assertEqual(c, 'sum row 6', repr(c))
+        self.assertEqual(atype, 'calculate_row_sum')
+
+    def test_sun_row_6_corrects_to_sum(self):
+        """'sun row 6' → corrected to 'sum row 6' → calculate_row_sum."""
+        c, _, atype = _action('sun row 6')
+        self.assertIn('sum', c, repr(c))
+        self.assertEqual(atype, 'calculate_row_sum')
+
+    # ── SUM ROW: destructive safety ───────────────────────────────────────
+
+    def test_some_row_6_never_delete_row(self):
+        """'some row 6' must NEVER produce delete_row — safety guard."""
+        _, _, atype = _action('some row 6')
+        self.assertNotEqual(atype, 'delete_row',
+            "'some row 6' was misrouted to delete_row — destructive safety violation")
+
+    def test_sam_row_six_never_add_row(self):
+        """'sam row six' must NEVER produce add_row — safety guard."""
+        _, _, atype = _action('sam row six')
+        self.assertNotEqual(atype, 'add_row',
+            "'sam row six' was misrouted to add_row — destructive safety violation")
+
+    # ── SUM COLUMN: positive cases ────────────────────────────────────────
+
+    def test_sum_column_b_baseline(self):
+        """'sum column B' → calculate_sum intent (baseline)."""
+        _, intent, _ = _action('sum column B')
+        self.assertEqual(intent, 'calculate_sum')
+
+    def test_some_column_b_corrects_to_sum(self):
+        """'some column B' → corrected to 'sum column B' → calculate_sum intent."""
+        c, intent, _ = _action('some column B')
+        self.assertIn('sum', c, repr(c))
+        self.assertEqual(intent, 'calculate_sum')
+
+    def test_sam_column_b_corrects_to_sum(self):
+        """'sam column B' → corrected to 'sum column B' → calculate_sum intent."""
+        c, intent, _ = _action('sam column B')
+        self.assertIn('sum', c, repr(c))
+        self.assertEqual(intent, 'calculate_sum')
+
+    def test_sun_column_b_corrects_to_sum(self):
+        """'sun column B' → corrected to 'sum column B' → calculate_sum intent."""
+        c, intent, _ = _action('sun column B')
+        self.assertIn('sum', c, repr(c))
+        self.assertEqual(intent, 'calculate_sum')
+
+    # ── SUM COLUMN: formatting safety ─────────────────────────────────────
+
+    def test_some_column_b_never_format_cells(self):
+        """'some column B' must NEVER route to format_cells."""
+        _, intent, _ = _action('some column B')
+        self.assertNotEqual(intent, 'format_cells',
+            "'some column B' was misrouted to format_cells — must be sum/calculate_sum")
+
+    # ── Regressions ───────────────────────────────────────────────────────
+
+    def test_regression_add_row_sam_6_unchanged(self):
+        """'add row Sam 6' → still add_row (Sam is a column name, not a sum prefix)."""
+        _, _, atype = _action('add row Sam 6')
+        self.assertEqual(atype, 'add_row',
+            "'add row Sam 6' must not be rewritten — Sam is a column name here")
+
+    def test_regression_write_cell_some_text_unchanged(self):
+        """'write cell A1 some text' → still write_cell (some not before row/column)."""
+        _, _, atype = _action('write cell A1 some text')
+        self.assertEqual(atype, 'write_cell')
+
+    def test_regression_replace_sam_with_john_unchanged(self):
+        """'replace Sam with John' → still find_replace (Sam not before row/column)."""
+        _, _, atype = _action('replace Sam with John')
+        self.assertEqual(atype, 'find_replace')
+
+    def test_regression_delete_row_6_unchanged(self):
+        """'delete row 6' → still delete_row (explicit delete verb, not some/sam/sun)."""
+        _, _, atype = _action('delete row 6')
+        self.assertEqual(atype, 'delete_row')
+
+    def test_regression_fill_column_b_blue_unchanged(self):
+        """'fill column B blue' → still format_cells (fill not a sum phonetic)."""
+        _, intent, _ = _action('fill column B blue')
+        self.assertEqual(intent, 'format_cells')
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)
