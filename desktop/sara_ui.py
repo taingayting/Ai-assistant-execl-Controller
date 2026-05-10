@@ -402,6 +402,7 @@ class WakeWordListenerThread(QThread):
                 frames_per_buffer=frame_samples,
             )
 
+            _wake_log = __import__('logging').getLogger('wake_word')
             last_emit = 0.0
             while self._running:
                 frame = stream.read(frame_samples, exception_on_overflow=False)
@@ -410,7 +411,18 @@ class WakeWordListenerThread(QThread):
                     continue
                 prediction = model.predict(np.frombuffer(frame, dtype=np.int16))
                 score = float(prediction.get(target_label, 0.0))
+                # Log near-misses (score > 0.2) to aid threshold tuning without
+                # flooding the log at every silent frame.
+                if score > 0.2:
+                    _accepted = score >= self.threshold
+                    _wake_log.debug(
+                        '[WakeWord] score=%.3f threshold=%.3f %s label=%s',
+                        score, self.threshold,
+                        'ACCEPTED' if _accepted else 'rejected',
+                        target_label,
+                    )
                 if score >= self.threshold and (time.time() - last_emit) >= self.cooldown_seconds:
+                    _wake_log.info('[WakeWord] triggered score=%.3f label=%s', score, target_label)
                     last_emit = time.time()
                     self.wake_detected.emit(target_label, score)
                     model.reset()
@@ -1184,10 +1196,17 @@ class SaraFloatingWindow(QMainWindow):
         # An action may arrive as {"type": "add_row", ...} OR as {"steps": [...]}
         # (the latter when _plan_and_validate wraps a single-step in a steps list).
         # Multi-step = steps list with more than one entry (regardless of top-level type).
+        # Exception: add_column is non-destructive — multiple columns execute immediately
+        # without plan-review confirmation so the user gets direct feedback.
+        _steps = action.get("steps", []) if isinstance(action, dict) else []
+        _all_add_col = bool(_steps) and all(
+            isinstance(s, dict) and s.get("type") == "add_column" for s in _steps
+        )
         is_multi_step = (
             isinstance(action, dict)
             and isinstance(action.get("steps"), list)
             and len(action["steps"]) > 1
+            and not _all_add_col
         )
 
         if is_multi_step:

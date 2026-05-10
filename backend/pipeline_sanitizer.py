@@ -376,7 +376,7 @@ _WAKE_PREFIX_RE = re.compile(
 # Spoken digit words used by STT for single-digit row numbers in delete/remove
 # context.  Defined here so the lambda in _TRANSCRIPT_CORRECTIONS can reference it.
 _ROW_NUM_WORDS: dict[str, str] = {
-    'one': '1', 'won': '1', 'two': '2', 'too': '2', 'three': '3',
+    'one': '1', 'won': '1', 'two': '2', 'to': '2', 'too': '2', 'three': '3',
     'four': '4', 'five': '5', 'six': '6', 'seven': '7',
     'eight': '8', 'nine': '9',
 }
@@ -575,7 +575,7 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     # STT returns spoken digit words for single-digit row numbers.
     # Restricted to "delete/remove row" context to avoid clobbering names in add-row.
     (re.compile(
-        r'\b(delete|remove)\s+row\s+(one|won|two|too|three|four|five|six|seven|eight|nine)\b',
+        r'\b(delete|remove)\s+row\s+(one|won|two|to|too|three|four|five|six|seven|eight|nine)\b',
         re.IGNORECASE,
     ), lambda m: f'{m.group(1).lower()} row {_ROW_NUM_WORDS[m.group(2).lower()]}'),
 
@@ -848,7 +848,15 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     (re.compile(r'\bfreeze\s+(?:the\s+)?top\s+rows?\b', re.IGNORECASE), 'freeze header'),
     (re.compile(r'\bfreeze\s+(?:the\s+)?rows?\b', re.IGNORECASE), 'freeze panes'),
     (re.compile(r'\bunfreeze\s+(?:the\s+)?rows?\b',           re.IGNORECASE), 'unfreeze panes'),
-    # ══ "freeze panes" filler-prefix and phonetic variants ════════════════
+    # ══ "freeze panes" / "unfreeze panes" filler-prefix and phonetic variants ══════
+    # "and freeze pen/pens/paints" → "unfreeze panes"
+    # STT splits "un-" as "and/in" and hears "panes" as "pen/pens/paints/pants".
+    # Must run BEFORE the plain "and freeze → freeze" strip so the unfreeze
+    # interpretation wins when the panes phonetic is also garbled.
+    (re.compile(
+        r'^(?:and|in)\s+freeze\s+(?:pan(?:ts?|s)?|pen(?:s|ts?)?|paint(?:s)?)\b',
+        re.IGNORECASE,
+    ), 'unfreeze panes'),
     # "and freeze pan/pen/pants" — leading filler before "freeze" (real mic log)
     (re.compile(r'^(?:and|i\'?m|i\s+am)\s+(?=freeze\b)', re.IGNORECASE), ''),
     # "freeze pan/pants/pens" → "freeze panes" — STT phonetic corruption
@@ -954,19 +962,34 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
         re.IGNORECASE,
     ), lambda m: f'{m.group(1)} {m.group(2)} bold'),
 
+    # ══ Font-size increase/decrease STT mishears ═════════════════════════════════
+    # "in grease font size B2" / "in greece font size B2" → "increase font size B2"
+    # STT splits "in-crease" as "in grease/greece" at the word boundary.
+    # Positive lookahead for "font size" or bare "size" restricts to font commands.
+    (re.compile(r'\bin\s+gre(?:ase|ece)\b(?=\s+(?:font[\s-])?size\b)', re.IGNORECASE), 'increase'),
+    # "degrease font size B2" → "decrease font size B2"
+    (re.compile(r'\bdegrease\b(?=\s+(?:font[\s-])?size\b)', re.IGNORECASE), 'decrease'),
+
     # ══ "sum" command: additional STT mishears ════════════════════════════════
     # "sam B2:B5" / "sam column B" → "sum ..." — "sam" is a phonetic variant of "sum".
     # Restricted to cell-ref or "column" context to avoid clobbering the name "Sam".
     (re.compile(r'\bsam\b(?=\s+(?:[A-Za-z]\d+|column)\b)', re.IGNORECASE), 'sum'),
+    # "sun column B" → "sum column B" — "sun" is a phonetic variant of "sum".
+    # Restricted to cell-ref or "column" context to avoid clobbering the noun "sun".
+    (re.compile(r'\bsun\b(?=\s+(?:[A-Za-z]\d+|column)\b)', re.IGNORECASE), 'sum'),
     # "some column B" → "sum column B" (the existing "some" rule covers cell refs only).
     (re.compile(r'\bsome\b(?=\s+column\b)', re.IGNORECASE), 'sum'),
 
     # ══ "fill" STT mishears at utterance start ════════════════════════════════
-    # "fear row 2 with red" / "pure row 2 with red" → "fill row 2 with red"
-    # STT mishears "fill" as "fear" / "pure" / "pier" / "fur" at utterance start.
-    # Lookahead requires "row" + digit immediately after so "I fear row changes"
-    # (conversational) is NOT rewritten.
-    (re.compile(r'^(?:fear|pure|pier|fur)\s+row\b(?=\s+\d+\b)', re.IGNORECASE), 'fill row'),
+    # "fear/feel/field row 2 with red" → "fill row 2 with red"
+    # STT mishears "fill" as "fear"/"feel"/"field"/"pure"/"pier"/"fur".
+    # Row target: lookahead requires "row" + digit to avoid rewriting conversational phrases.
+    (re.compile(r'^(?:fear|feel|field|pure|pier|fur)\s+row\b(?=\s+\d+\b)', re.IGNORECASE), 'fill row'),
+    # Column target: "feel column B blue" → "fill column B blue"
+    (re.compile(r'^(?:fear|feel|field)\s+column\b', re.IGNORECASE), 'fill column'),
+    # Cell-ref target: "feel A1 green" → "fill A1 green"
+    (re.compile(r'^(?:fear|feel|field)\s+([A-Za-z]\d+)\b', re.IGNORECASE),
+     lambda m: f'fill {m.group(1)}'),
 
     # ══ "row" STT mishears in fill / color / format context ══════════════════
     # "fill/color/format/highlight roll/role/roto [N]" → "... row [N]"
@@ -977,13 +1000,19 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
         r'\b(fill|color|colour|format|highlight)\s+(?:a\s+)?(?:roll|role|roto)\b',
         re.IGNORECASE,
     ), lambda m: f'{m.group(1)} row'),
-    # "fill/color/format/highlight row two/too/..." → "... row 2/3/..."
+    # "fill/color/format/highlight row two/to/too/..." → "... row 2/3/..."
     # Extends the existing delete/remove digit-word rule to other row commands.
     (re.compile(
         r'\b(fill|color|colour|format|highlight)\s+row\s+'
-        r'(one|won|two|too|three|four|five|six|seven|eight|nine)\b',
+        r'(one|won|two|to|too|three|four|five|six|seven|eight|nine)\b',
         re.IGNORECASE,
     ), lambda m: f'{m.group(1)} row {_ROW_NUM_WORDS[m.group(2).lower()]}'),
+
+    # ══ "add column" plural normalisation ════════════════════════════════════
+    # "add columns Name Score Age" → "add column Name Score Age"
+    # STT/user sometimes says "columns" (plural).  Normalise so intent detection
+    # and slot-checking see the canonical singular form.
+    (re.compile(r'\badd\s+columns\b', re.IGNORECASE), 'add column'),
 ]
 
 # ── Pass 2: command-prefix normalization ──────────────────────────────────
@@ -1867,6 +1896,16 @@ def check_command_slots(intent: str | None, text: str,
                 "Which sheet should I switch to? "
                 "Please say: switch sheet <name>."
             )
+        # Guard: "N row M" with no delete verb — destructive action must never
+        # be inferred from a bare number sequence.  "3 row 2" could be STT
+        # corruption of "delete row 3" but without an explicit verb it is safer
+        # to ask for clarification than to guess and mutate the sheet.
+        if re.search(r'^\d+\s+row\s+\d+', lower):
+            return (
+                "Did you mean to delete a row? "
+                "Please say 'delete row 3' clearly."
+            )
+
         # Guard: "sheet" present but no sheet command intent detected — e.g.
         # "Do it, sheet, style" / "Do let the sheet start".  In production the
         # ambiguity guard blocks these, but an explicit slot message here ensures

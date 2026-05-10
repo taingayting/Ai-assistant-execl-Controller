@@ -2637,16 +2637,25 @@ class TestP19VoiceFailures(unittest.TestCase):
     # ── P6: 'freeze panes' garbles ───────────────────────────────────────
 
     def test_and_freeze_pan_corrects(self):
+        # "and freeze pan" — STT splits "un-" as "and"; "pan" ≈ "panes".
+        # Expected: unfreeze panes (Bug-1 fix; previously wrong: freeze panes).
         from pipeline_sanitizer import correct_transcript
-        self.assertEqual(correct_transcript('and freeze pan').lower(), 'freeze panes')
+        self.assertEqual(correct_transcript('and freeze pan').lower(), 'unfreeze panes')
 
     def test_and_freeze_pants_corrects(self):
+        # Same STT split: "and freeze pants" → unfreeze panes.
         from pipeline_sanitizer import correct_transcript
-        self.assertEqual(correct_transcript('and freeze pants').lower(), 'freeze panes')
+        self.assertEqual(correct_transcript('and freeze pants').lower(), 'unfreeze panes')
 
     def test_and_freeze_pen_corrects(self):
+        # "and freeze pen" → unfreeze panes (Bug-1 fix).
         from pipeline_sanitizer import correct_transcript
-        self.assertEqual(correct_transcript('and freeze pen').lower(), 'freeze panes')
+        self.assertEqual(correct_transcript('and freeze pen').lower(), 'unfreeze panes')
+
+    def test_freeze_pen_without_prefix_still_freeze(self):
+        # Bare "freeze pen" (no "and/in" prefix) must still → freeze panes.
+        from pipeline_sanitizer import correct_transcript
+        self.assertEqual(correct_transcript('freeze pen').lower(), 'freeze panes')
 
     def test_freeze_pan_intent(self):
         r = _pipeline('freeze pan')
@@ -11316,6 +11325,214 @@ class TestP47DuplicateSuccessGuard(unittest.TestCase):
         same_prefix = {"success": True, "speech_text": long_text[:80] + "extra"}
         blocked = not sim.process(same_prefix)
         self.assertTrue(blocked, "Payloads sharing the same first-80-char prefix must be deduplicated")
+
+
+# ---------------------------------------------------------------------------
+# P48 — Voice STT safety, transcript normalization, and command correction
+# ---------------------------------------------------------------------------
+
+class TestP48VoiceSafety(unittest.TestCase):
+    """Mandatory test suite for P48 bug fixes.
+
+    Coverage:
+      Bug 1 — "and freeze pen/pens/paints" → unfreeze_panes
+      Bug 2 — "add column" multi-name → executes directly (no plan popup)
+      Bug 3 — "3 row 2" (no delete verb) → clarification, not destructive exec
+      Bug 4 — "sun/sam/some column B" → sum intent
+      Bug 5 — "in grease/greece font size" → increase; "degrease" → decrease
+      Bug 6 — "row to/too" numeric slot → row 2
+      Bug 7 — "fear/feel/field" → fill in formatting context
+      Bug 8 — wake word score logging (structural, no runtime assertion)
+    """
+
+    # ── Bug 1: Unfreeze phonetic variants ─────────────────────────────────
+
+    def test_b1_and_freeze_pen_routes_unfreeze(self):
+        """'and freeze pen' → corrects to 'unfreeze panes' → intent unfreeze_panes."""
+        r = _pipeline('and freeze pen')
+        self.assertEqual(r['corrected'], 'unfreeze panes', repr(r['corrected']))
+        self.assertEqual(r['intent'], 'unfreeze_panes', repr(r['intent']))
+
+    def test_b1_and_freeze_pens_routes_unfreeze(self):
+        """'and freeze pens' → unfreeze_panes."""
+        r = _pipeline('and freeze pens')
+        self.assertEqual(r['corrected'], 'unfreeze panes', repr(r['corrected']))
+        self.assertEqual(r['intent'], 'unfreeze_panes', repr(r['intent']))
+
+    def test_b1_and_freeze_paints_routes_unfreeze(self):
+        """'and freeze paints' → unfreeze_panes."""
+        r = _pipeline('and freeze paints')
+        self.assertEqual(r['corrected'], 'unfreeze panes', repr(r['corrected']))
+        self.assertEqual(r['intent'], 'unfreeze_panes', repr(r['intent']))
+
+    def test_b1_in_freeze_pen_routes_unfreeze(self):
+        """'in freeze pen' (alternative STT prefix) → unfreeze_panes."""
+        r = _pipeline('in freeze pen')
+        self.assertEqual(r['corrected'], 'unfreeze panes', repr(r['corrected']))
+        self.assertEqual(r['intent'], 'unfreeze_panes', repr(r['intent']))
+
+    def test_b1_freeze_pen_still_freeze(self):
+        """Bare 'freeze pen' (no prefix) → freeze_panes (not unfreeze)."""
+        r = _pipeline('freeze pen')
+        self.assertEqual(r['intent'], 'freeze_panes', repr(r))
+
+    def test_b1_and_freeze_panes_still_freeze(self):
+        """'and freeze panes' (correct word) → freeze_panes (real word, no unfreeze rewrite)."""
+        r = _pipeline('and freeze panes')
+        self.assertEqual(r['intent'], 'freeze_panes', repr(r))
+
+    # ── Bug 2: add column multi-name executes (no plan popup) ─────────────
+    # Pipeline-level: intent must be add_column and no slot error.
+    # (Whether the popup shows is desktop logic; here we confirm pipeline is clean.)
+
+    def test_b2_add_column_single_name_no_slot_error(self):
+        """'add column phone' → add_column intent, no slot clarification."""
+        r = _pipeline('add column phone')
+        self.assertEqual(r['intent'], 'add_column', repr(r))
+        self.assertIsNone(r['slot_msg'], repr(r['slot_msg']))
+
+    def test_b2_add_column_two_names_no_slot_error(self):
+        """'add column phone computer' → add_column intent, no slot clarification."""
+        r = _pipeline('add column phone computer')
+        self.assertEqual(r['intent'], 'add_column', repr(r))
+        self.assertIsNone(r['slot_msg'], repr(r['slot_msg']))
+
+    def test_b2_add_column_four_names_no_slot_error(self):
+        """'add column name age year date' → add_column, no slot error."""
+        r = _pipeline('add column name age year date')
+        self.assertEqual(r['intent'], 'add_column', repr(r))
+        self.assertIsNone(r['slot_msg'], repr(r['slot_msg']))
+
+    def test_b2_add_columns_plural_normalised(self):
+        """'add columns name score age' → normalised to 'add column ...' → add_column."""
+        r = _pipeline('add columns name score age')
+        self.assertEqual(r['intent'], 'add_column', repr(r))
+        self.assertIsNone(r['slot_msg'], repr(r['slot_msg']))
+
+    def test_b2_bare_add_column_gets_clarification(self):
+        """'add column' with no name → slot clarification (column name required)."""
+        r = _pipeline('add column')
+        self.assertEqual(r['intent'], 'add_column', repr(r))
+        self.assertIsNotNone(r['slot_msg'], "Bare 'add column' must request a column name")
+
+    # ── Bug 3: "N row M" without delete verb → clarification ──────────────
+
+    def test_b3_delete_row_with_verb_executes(self):
+        """'delete row 3' → action produced, no clarification."""
+        r = _pipeline('delete row 3')
+        self.assertEqual(r['intent'], 'delete_row', repr(r))
+        self.assertIsNone(r['slot_msg'], repr(r['slot_msg']))
+        self.assertIsNotNone(r['action'], "delete row 3 must produce an action")
+
+    def test_b3_n_row_m_without_verb_clarifies(self):
+        """'3 row 2' (no delete verb) → clarification, not destructive execute."""
+        r = _pipeline('3 row 2')
+        self.assertIsNotNone(r['slot_msg'],
+            "'3 row 2' must produce a clarification, not execute a delete")
+
+    # ── Bug 4: sun/sam/some column B → sum ────────────────────────────────
+
+    def test_b4_sum_column_b_intent(self):
+        """'sum column B' → calculate_sum intent (baseline)."""
+        r = _pipeline('sum column B')
+        self.assertEqual(r['intent'], 'calculate_sum', repr(r))
+
+    def test_b4_sun_column_b_corrects_to_sum(self):
+        """'sun column B' → corrected to 'sum column B' → calculate_sum intent."""
+        r = _pipeline('sun column B')
+        self.assertIn('sum', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'calculate_sum', repr(r))
+
+    def test_b4_sam_column_b_corrects_to_sum(self):
+        """'sam column B' → corrected to 'sum column B' → calculate_sum intent."""
+        r = _pipeline('sam column B')
+        self.assertIn('sum', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'calculate_sum', repr(r))
+
+    def test_b4_some_column_b_corrects_to_sum(self):
+        """'some column B' → corrected to 'sum column B' → calculate_sum intent."""
+        r = _pipeline('some column B')
+        self.assertIn('sum', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'calculate_sum', repr(r))
+
+    # ── Bug 5: font size increase/decrease phonetics ───────────────────────
+
+    def test_b5_increase_font_size_baseline(self):
+        """'increase font size B2' → format_cells intent (baseline)."""
+        r = _pipeline('increase font size B2')
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b5_in_grease_font_size_corrects(self):
+        """'in grease font size B2' → corrected to 'increase ...' → format_cells."""
+        r = _pipeline('in grease font size B2')
+        self.assertIn('increase', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b5_in_greece_font_size_corrects(self):
+        """'in greece font size B2' → corrected to 'increase ...' → format_cells."""
+        r = _pipeline('in greece font size B2')
+        self.assertIn('increase', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b5_decrease_font_size_baseline(self):
+        """'decrease font size B2' → format_cells intent (baseline)."""
+        r = _pipeline('decrease font size B2')
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b5_degrease_font_size_corrects(self):
+        """'degrease font size B2' → corrected to 'decrease ...' → format_cells."""
+        r = _pipeline('degrease font size B2')
+        self.assertIn('decrease', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    # ── Bug 6: "row to/too" numeric slot ─────────────────────────────────
+
+    def test_b6_delete_row_to_becomes_row_2(self):
+        """'delete row to' → corrected to 'delete row 2' (numeric slot)."""
+        r = _pipeline('delete row to')
+        self.assertIn('row 2', r['corrected'], repr(r['corrected']))
+
+    def test_b6_delete_row_too_becomes_row_2(self):
+        """'delete row too' → corrected to 'delete row 2'."""
+        r = _pipeline('delete row too')
+        self.assertIn('row 2', r['corrected'], repr(r['corrected']))
+
+    def test_b6_go_to_sheet_unchanged(self):
+        """'go to sheet report' must NOT be rewritten by the row-number rule."""
+        r = _pipeline('go to sheet report')
+        self.assertNotIn('row 2', r['corrected'],
+            "'go to sheet report' must not produce 'row 2' — 'to' here is navigation, not a row number")
+
+    # ── Bug 7: fear/feel/field → fill in formatting context ───────────────
+
+    def test_b7_fill_row_2_baseline(self):
+        """'fill row 2 red' → format_cells intent (baseline)."""
+        r = _pipeline('fill row 2 red')
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b7_fear_row_2_corrects_to_fill(self):
+        """'fear row 2 red' → corrected to 'fill row 2 red' → format_cells."""
+        r = _pipeline('fear row 2 red')
+        self.assertIn('fill', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b7_feel_row_2_corrects_to_fill(self):
+        """'feel row 2 red' → corrected to 'fill row 2 ...' → format_cells."""
+        r = _pipeline('feel row 2 red')
+        self.assertIn('fill', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b7_feel_column_b_corrects_to_fill(self):
+        """'feel column B blue' → corrected to 'fill column B blue' → format_cells."""
+        r = _pipeline('feel column B blue')
+        self.assertIn('fill', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
+
+    def test_b7_field_a1_corrects_to_fill(self):
+        """'field A1 green' → corrected to 'fill A1 green' → format_cells."""
+        r = _pipeline('field A1 green')
+        self.assertIn('fill', r['corrected'], repr(r['corrected']))
+        self.assertEqual(r['intent'], 'format_cells', repr(r))
 
 
 if __name__ == '__main__':
