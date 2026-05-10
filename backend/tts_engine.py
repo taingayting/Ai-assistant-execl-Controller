@@ -28,6 +28,7 @@ import logging
 import os
 import queue
 import threading
+import time as _time
 
 log = logging.getLogger('tts_engine')
 
@@ -37,12 +38,41 @@ ENABLE_TTS: bool = os.environ.get('ENABLE_TTS', 'false').lower() in ('true', '1'
 TTS_RATE: int = int(os.environ.get('TTS_RATE', '170'))
 TTS_VOLUME: float = float(os.environ.get('TTS_VOLUME', '0.9'))
 
+# Identical speech requests within this window are treated as duplicates.
+# Prevents double-speech when two code paths (e.g. backend after_request hook
+# and a desktop TTS worker) both enqueue the same text almost simultaneously.
+_DEDUP_WINDOW: float = 2.0
+
 # --------------- Internal state ---------------
 
 _engine = None          # current pyttsx3 engine (None between utterances)
 _queue: queue.Queue[str | None] = queue.Queue()
 _worker: threading.Thread | None = None
+
+# Dedup state — tracks the most recently enqueued text and its timestamp.
+# Guarded by _dedup_lock because speak/safe_speak may be called from any thread.
+_dedup_lock = threading.Lock()
+_last_spoken_text: str = ''
+_last_spoken_time: float = 0.0
 _started = False
+
+
+def _is_duplicate(text: str) -> bool:
+    """Return True and log a warning if *text* was just enqueued within _DEDUP_WINDOW.
+
+    Thread-safe.  Updates the dedup state on first occurrence so the second
+    identical call within the window is recognised and rejected.
+    """
+    global _last_spoken_text, _last_spoken_time
+    now = _time.monotonic()
+    with _dedup_lock:
+        if text == _last_spoken_text and now - _last_spoken_time < _DEDUP_WINDOW:
+            log.warning('[TTS] duplicate skipped (same text within %.1fs): %r',
+                        _DEDUP_WINDOW, text[:60])
+            return True
+        _last_spoken_text = text
+        _last_spoken_time = now
+    return False
 
 
 def initialize_engine() -> None:
@@ -95,6 +125,8 @@ def speak(text: str) -> None:
     """
     if not ENABLE_TTS or not text:
         return
+    if _is_duplicate(text):
+        return
     # Lazily start the worker if caller forgot initialize_engine()
     if not _started:
         initialize_engine()
@@ -118,6 +150,8 @@ def safe_speak(text: str) -> None:
         return
     if not text:
         log.warning('[TTS] speak requested but text is empty — skipping')
+        return
+    if _is_duplicate(text):
         return
 
     log.info('[TTS] speak requested: %r', text[:80])

@@ -11218,5 +11218,105 @@ class TestP46UiPipelineAlignment(unittest.TestCase):
                       f"Got sheet_name {act.get('sheet_name')!r}")
 
 
+# ---------------------------------------------------------------------------
+# P47 — single-response deduplication guard
+# ---------------------------------------------------------------------------
+
+class _GuardSimulator:
+    """Minimal simulation of the deduplication guard in _on_execute_completed.
+
+    Mirrors the exact guard state-machine added to SaraWindow so that the
+    tests verify the guard logic without requiring a live PyQt6 environment.
+    """
+
+    def __init__(self):
+        import time as _t
+        self._time = _t
+        self.history: list[tuple[str, bool]] = []   # (msg, success)
+
+    def process(self, payload: dict) -> bool:
+        """Process one execute-completed payload.  Returns False when blocked."""
+        if payload.get("success", False):
+            _now = self._time.monotonic()
+            _key = (payload.get("speech_text", "")[:80], True)
+            if (getattr(self, "_last_exec_key", None) == _key and
+                    _now - getattr(self, "_last_exec_time", 0.0) < 2.0):
+                return False  # duplicate guard triggered
+            self._last_exec_key = _key
+            self._last_exec_time = _now
+
+        if not payload.get("success", False):
+            msg = payload.get("error", "Execution failed")
+            self.history.append((msg, False))
+        else:
+            msg = payload.get("speech_text") or "Action executed successfully."
+            self.history.append((msg, True))
+        return True
+
+
+class TestP47DuplicateSuccessGuard(unittest.TestCase):
+    """P47 — deduplication guard prevents duplicate success responses."""
+
+    def _sim(self) -> _GuardSimulator:
+        return _GuardSimulator()
+
+    def test_01_single_success_adds_one_history_item(self):
+        """First success call → exactly one history entry added."""
+        sim = self._sim()
+        allowed = sim.process({"success": True, "speech_text": "Row added."})
+        self.assertTrue(allowed, "First success must be allowed through")
+        self.assertEqual(len(sim.history), 1)
+        self.assertEqual(sim.history[0], ("Row added.", True))
+
+    def test_02_identical_success_within_2s_is_blocked(self):
+        """Identical success payload arriving within 2 s → second call blocked."""
+        sim = self._sim()
+        payload = {"success": True, "speech_text": "Row added."}
+        sim.process(payload)           # first: allowed
+        blocked = not sim.process(payload)   # second: same key, <2 s → blocked
+        self.assertTrue(blocked, "Duplicate identical success within 2 s must be blocked")
+        self.assertEqual(len(sim.history), 1, "History must contain only one entry")
+
+    def test_03_different_success_payloads_both_allowed(self):
+        """Two different success messages → both go through (no false positive)."""
+        sim = self._sim()
+        sim.process({"success": True, "speech_text": "Row added."})
+        allowed = sim.process({"success": True, "speech_text": "Cell written."})
+        self.assertTrue(allowed, "Different success message must not be blocked")
+        self.assertEqual(len(sim.history), 2)
+        self.assertEqual(sim.history[0][0], "Row added.")
+        self.assertEqual(sim.history[1][0], "Cell written.")
+
+    def test_04_failure_after_success_is_always_shown(self):
+        """Failure payload is never blocked by the success dedup guard."""
+        sim = self._sim()
+        sim.process({"success": True, "speech_text": "Row added."})
+        allowed = sim.process({"success": False, "error": "Sheet not found"})
+        self.assertTrue(allowed, "Failure must always be shown")
+        self.assertEqual(len(sim.history), 2)
+        self.assertEqual(sim.history[1], ("Sheet not found", False))
+
+    def test_05_same_success_after_2s_delay_is_allowed(self):
+        """Same success message but state manually aged past 2 s → allowed again."""
+        sim = self._sim()
+        payload = {"success": True, "speech_text": "Row added."}
+        sim.process(payload)
+        # Simulate time having passed by backdating the recorded timestamp
+        sim._last_exec_time -= 3.0
+        allowed = sim.process(payload)
+        self.assertTrue(allowed, "Same message after 2 s must be allowed")
+        self.assertEqual(len(sim.history), 2, "Aged-out duplicate must add new history entry")
+
+    def test_06_guard_key_uses_speech_text_prefix(self):
+        """Guard key is built from the first 80 chars of speech_text."""
+        sim = self._sim()
+        long_text = "X" * 100
+        sim.process({"success": True, "speech_text": long_text})
+        # Payload with same first 80 chars but longer total → still blocked
+        same_prefix = {"success": True, "speech_text": long_text[:80] + "extra"}
+        blocked = not sim.process(same_prefix)
+        self.assertTrue(blocked, "Payloads sharing the same first-80-char prefix must be deduplicated")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

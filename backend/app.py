@@ -127,7 +127,14 @@ tts_engine.initialize_engine()
 
 @app.after_request
 def _tts_after_request(response):
-    """Speak *speech_text* from JSON API responses in a background thread."""
+    """Speak *speech_text* from JSON API responses in a background thread.
+
+    /api/execute is excluded: the desktop popup owns TTS for execution results
+    via its own TTSWorker.  Speaking here too would share the pyttsx3 engine
+    across two threads and cause the same text to be spoken twice.
+    """
+    if request.path == '/api/execute':
+        return response
     if response.content_type and 'application/json' in response.content_type:
         try:
             data = response.get_json(silent=True)

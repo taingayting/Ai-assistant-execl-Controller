@@ -1125,9 +1125,6 @@ class SaraFloatingWindow(QMainWindow):
         self.status_label.setText("Transcribing...")
         self.transcript_view.setPlainText("Transcribing...")
         self._start_thinking_indicator("Transcribing")
-        # Play TTS "working" message while waiting for backend (non-blocking)
-        self._tts_worker = TTSWorker("Working on your Excel command")
-        self._tts_worker.start()
         self.uploader = UploadWorker(wav_bytes)
         self.uploader.completed.connect(self.on_upload_completed)
         self.uploader.start()
@@ -1238,6 +1235,18 @@ class SaraFloatingWindow(QMainWindow):
         result = getattr(self, "_pending_result", None)
         transcript = result.transcript if result else ""
 
+        # Single-response guard: identical success payload within 2 s → skip.
+        # Prevents duplicate history/TTS when the pyttsx3 engine emits a queued
+        # item twice due to concurrent filler/response worker interaction.
+        if payload.get("success", False):
+            _now = time.monotonic()
+            _key = (payload.get("speech_text", "")[:80], True)
+            if (getattr(self, "_last_exec_key", None) == _key and
+                    _now - getattr(self, "_last_exec_time", 0.0) < 2.0):
+                return
+            self._last_exec_key = _key
+            self._last_exec_time = _now
+
         if not payload.get("success", False):
             msg = payload.get("error", "Execution failed")
             self.status_dot.set_state("error")
@@ -1289,8 +1298,6 @@ class SaraFloatingWindow(QMainWindow):
         self.status_dot.set_state("processing")
         self.status_label.setText("Executing plan...")
         self._start_thinking_indicator("Executing plan")
-        self._tts_worker = TTSWorker("Executing your plan now")
-        self._tts_worker.start()
         self._execute_worker = ExecuteWorker(action)
         self._execute_worker.completed.connect(self._on_execute_completed)
         self._execute_worker.start()
