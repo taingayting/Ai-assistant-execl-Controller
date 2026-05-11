@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import time
 from dataclasses import dataclass, field
 
 # Load .env before any backend module reads env vars at import time.
@@ -143,11 +144,14 @@ class Agent:
             executed.
         """
         log.info('handle_text: text=%r  auto_execute=%s', text[:120], auto_execute)
+        _t_corr = time.perf_counter()
         corrected = correct_transcript(text)
+        log.info('[LATENCY] correction=%.1fms', (time.perf_counter() - _t_corr) * 1000)
         if corrected != text:
             log.info('handle_text: transcript corrected %r → %r', text[:80], corrected[:80])
         text = corrected
         enriched = _enrich_text_with_context(text)
+        _t_route = time.perf_counter()
         try:
             action = route_llm(enriched)
         except Exception as exc:
@@ -159,6 +163,9 @@ class Agent:
                 speech_text=ErrorHandler.for_system(failure, detail=str(exc)),
             )
 
+        log.info('[LATENCY] routing=%.0fms source=%s',
+                 (time.perf_counter() - _t_route) * 1000,
+                 action.get('_router_source', '?') if isinstance(action, dict) else '?')
         res = AgentResult(action=action)
         is_unknown = _is_unknown(action)
 

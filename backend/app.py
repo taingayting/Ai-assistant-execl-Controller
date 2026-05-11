@@ -317,12 +317,16 @@ def execute_endpoint():
     log.info('execute: running action %s on %s (workflow=%s)',
              action.get('type') if not has_steps else 'steps', filename,
              wf['id'] if wf else None)
+    _t_exec = time.perf_counter()
     agent_result = agent.handle_action(
         action,
         filename=filename,
         confirmed=True,
         auto_correct=auto_correct,
     )
+    log.info('[LATENCY] execution=%.0fms action=%s',
+             (time.perf_counter() - _t_exec) * 1000,
+             action.get('type') if not has_steps else 'steps')
     log.info('execute: agent result success=%s', agent_result.success)
 
     resp = agent_result.to_dict()
@@ -499,7 +503,10 @@ def upload_audio():
         # so Google Cloud Speech-to-Text can use the most specific model.
         # speech_recognition.py normalises short codes ('en') automatically.
         language = request.form.get('language', 'en-US') or 'en-US'
+        _t_stt = time.perf_counter()
         text = transcribe_audio_file(saved_path, language=language)
+        log.info('[LATENCY] stt=%.0fms model=%s', (time.perf_counter() - _t_stt) * 1000,
+                 os.environ.get('WHISPER_MODEL', 'base.en'))
         log.info('upload-audio: transcript=%r', text[:200] if text else '')
 
         # If speech recognition failed entirely, return a clear error instead

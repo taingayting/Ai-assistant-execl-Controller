@@ -11659,5 +11659,76 @@ class TestP49SumRowColumnSafety(unittest.TestCase):
         self.assertEqual(intent, 'format_cells')
 
 
+# ---------------------------------------------------------------------------
+# P52 — Popup session bug fixes
+#   Bug 1: "and do" / "And do" must route to undo (not stale previous action)
+#   Bug 2: STT failure must not re-execute previous action
+# ---------------------------------------------------------------------------
+
+class TestP52UndoMisfireFix(unittest.TestCase):
+    """Pipeline-level checks for P52 Bug 1 — undo misfire via stale action."""
+
+    def _correct(self, raw: str) -> str:
+        from pipeline_sanitizer import correct_transcript
+        return correct_transcript(raw)
+
+    # ── Core undo routing ─────────────────────────────────────────────────
+
+    def test_and_do_lowercase_corrects_to_undo(self):
+        """'and do' → corrected to 'undo'."""
+        self.assertEqual(self._correct('and do'), 'undo')
+
+    def test_and_do_titlecase_corrects_to_undo(self):
+        """'And do' → corrected to 'undo' (STT capitalises first word)."""
+        self.assertEqual(self._correct('And do'), 'undo')
+
+    def test_and_do_with_period_corrects_to_undo(self):
+        """'and do.' → corrected to 'undo' (STT adds trailing period)."""
+        self.assertEqual(self._correct('and do.'), 'undo')
+
+    def test_and_do_with_comma_corrects_to_undo(self):
+        """'and do,' → corrected to 'undo'."""
+        self.assertEqual(self._correct('and do,'), 'undo')
+
+    def test_and_do_with_question_mark_corrects_to_undo(self):
+        """'and do?' → corrected to 'undo'."""
+        self.assertEqual(self._correct('and do?'), 'undo')
+
+    def test_undo_direct_still_routes(self):
+        """'undo' direct → still 'undo' (regression guard)."""
+        self.assertEqual(self._correct('undo'), 'undo')
+
+    def test_and_do_routes_to_undo_intent(self):
+        """'and do' full pipeline → undo intent, not open_file or anything else."""
+        from pipeline_sanitizer import correct_transcript, detect_command_intent
+        c = correct_transcript('and do')
+        intent = detect_command_intent(c)
+        self.assertEqual(intent, 'undo',
+            f"Expected undo intent, got {intent!r} for corrected={c!r}")
+
+    def test_and_do_titlecase_routes_to_undo_intent(self):
+        """'And do' full pipeline → undo intent."""
+        from pipeline_sanitizer import correct_transcript, detect_command_intent
+        c = correct_transcript('And do')
+        intent = detect_command_intent(c)
+        self.assertEqual(intent, 'undo',
+            f"Expected undo intent, got {intent!r} for corrected={c!r}")
+
+    # ── Safety: "and do" must NEVER match non-standalone occurrences ──────
+
+    def test_and_do_not_triggered_mid_sentence(self):
+        """'please and do the work' must NOT be rewritten to undo."""
+        c = self._correct('please and do the work')
+        self.assertNotEqual(c, 'undo',
+            "'and do' correction must only fire when it is the entire utterance")
+        self.assertIn('and do', c)
+
+    def test_and_do_not_triggered_with_trailing_words(self):
+        """'and do it' must NOT be rewritten to undo."""
+        c = self._correct('and do it')
+        self.assertNotEqual(c.strip(), 'undo',
+            "'and do it' has trailing word and must not be rewritten")
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import sys
 import wave
@@ -78,6 +79,8 @@ CHANNELS = 1
 SAMPLE_WIDTH = 2
 CHUNK = 1024
 
+_lat_log = logging.getLogger('sara.latency')
+
 
 def _rms(frame: bytes) -> float:
     n = len(frame) // SAMPLE_WIDTH
@@ -111,6 +114,7 @@ class RecorderThread(QThread):
         self.seconds = max(1.0, seconds)
 
     def run(self) -> None:
+        _t_rec = time.perf_counter()
         try:
             import pyaudio
 
@@ -145,6 +149,8 @@ class RecorderThread(QThread):
             audio.terminate()
 
             wav_bytes = self._to_wav(frames)
+            _lat_log.info('[LATENCY] recording=%.0fms frames=%d',
+                          (time.perf_counter() - _t_rec) * 1000, len(frames))
             self.recording_finished.emit(wav_bytes)
         except Exception as exc:
             self.recording_failed.emit(f"Recording failed: {exc}")
@@ -565,6 +571,12 @@ class SaraFloatingWindow(QMainWindow):
         self.uploader: UploadWorker | None = None
         self.wake_listener: WakeWordListenerThread | None = None
         self._workflow_data: list[dict] = []
+
+        # ── Session persistence ──────────────────────────────────────────────────
+        # Mirrors run_sara.py _conversation_loop(): auto-listen after success,
+        # retry on failure, sleep after 3 consecutive failures.
+        self._session_active: bool = False  # True while in a voice command session
+        self._session_errors: int = 0       # consecutive STT/parse failures this session
 
         # Timers drive lightweight UI animations while recording/processing.
         self._mic_anim_timer = QTimer(self)
@@ -1108,6 +1120,16 @@ class SaraFloatingWindow(QMainWindow):
     def start_recording(self) -> None:
         if self.recorder is not None and self.recorder.isRunning():
             return
+        self._cmd_start = time.perf_counter()
+        # Activate a fresh session when none is running (manual mic click or
+        # first call from on_wake_detected before _session_active was set).
+        if not self._session_active:
+            self._session_errors = 0
+            self._session_active = True
+        # Clear stale action/result from the previous command so a failed parse
+        # in the new cycle can never accidentally re-execute the old action.
+        self._pending_result = None
+        self._pending_action = None
         # Pause wake-word listener while recording to avoid mic conflicts
         if self.wake_listener is not None:
             self.wake_listener.pause()
@@ -1158,6 +1180,8 @@ class SaraFloatingWindow(QMainWindow):
         # Resume wake-word listener on recording failure
         if self.wake_listener is not None:
             self.wake_listener.resume()
+        # Hardware mic error: end session — looping would be futile until mic is fixed
+        self._session_active = False
         QMessageBox.warning(self, "Recording Error", error)
 
     def on_upload_completed(self, result: UploadResult) -> None:
@@ -1185,6 +1209,22 @@ class SaraFloatingWindow(QMainWindow):
             self._add_history_item("(failed)", msg, success=False)
             if self.dev_toggle.isChecked():
                 self._update_dev_panel(result)
+            # Speak STT failure feedback once so user hears it without looking at UI.
+            # Only fires for recogniser errors — not network/backend errors — to avoid
+            # clashing with any spoken error text the backend already sent back.
+            _stt_phrases = ("speech recognition failed", "could not transcribe",
+                            "no speech detected", "whisper", "transcription failed")
+            if any(p in msg.lower() for p in _stt_phrases):
+                self._tts_stt_feedback = TTSWorker(
+                    "Speech recognition failed. Please try again."
+                )
+                self._tts_stt_feedback.start()
+            # Session: STT/network failure → count consecutive errors, retry or sleep
+            self._session_errors += 1
+            if self._session_active and self._session_errors < 3:
+                QTimer.singleShot(1500, self._session_listen)
+            elif self._session_errors >= 3:
+                self._session_sleep()
             return
 
         self._hide_error()
@@ -1246,6 +1286,12 @@ class SaraFloatingWindow(QMainWindow):
             else:
                 self._hide_suggestions()
             self._add_history_item(result.transcript, "(no action)", success=False)
+            # Session: heard speech but no command parsed → soft failure, retry
+            self._session_errors += 1
+            if self._session_active and self._session_errors < 3:
+                QTimer.singleShot(1500, self._session_listen)
+            elif self._session_errors >= 3:
+                self._session_sleep()
 
     def _on_execute_completed(self, payload: dict) -> None:
         """Handle result from ExecuteWorker (thread-safe via pyqtSignal)."""
@@ -1283,6 +1329,9 @@ class SaraFloatingWindow(QMainWindow):
             else:
                 self._hide_suggestions()
             self._add_history_item(transcript, msg, success=False)
+            # Execution failed but user DID speak — keep session alive, retry listening
+            if self._session_active:
+                QTimer.singleShot(2000, self._session_listen)
             return
 
         ai_message = payload.get("speech_text") or ""
@@ -1296,12 +1345,15 @@ class SaraFloatingWindow(QMainWindow):
                 ai_message = "Action executed successfully."
         self._hide_error()
         self._hide_suggestions()
+        self._session_errors = 0  # successful command resets consecutive failure count
         self._show_success("Done")           # banner: short status only
         self.response_view.setPlainText(ai_message)   # full message here
         self._add_history_item(transcript, ai_message, success=True)
         if ai_message:
             self.status_dot.set_state("speaking")
             self.status_label.setText("Speaking...")
+            _total_ms = (time.perf_counter() - getattr(self, '_cmd_start', time.perf_counter())) * 1000
+            _lat_log.info('[LATENCY] tts_start  total=%.0fms (wake→tts)', _total_ms)
             self._tts_worker = TTSWorker(ai_message)
             self._tts_worker.finished.connect(self._show_done_state)
             self._tts_worker.start()
@@ -1337,9 +1389,43 @@ class SaraFloatingWindow(QMainWindow):
         QTimer.singleShot(1500, self._show_ready_state)
 
     def _show_ready_state(self) -> None:
-        """Restore idle/ready state after Done is shown."""
+        """Restore idle/ready state after Done is shown.
+
+        Within an active session, auto-schedules the next recording cycle
+        after SARA_POST_TTS_DELAY so speaker echo has time to decay before
+        the mic opens — mirrors the POST_TTS_DELAY gap in run_sara.py.
+        """
         self.status_dot.set_state("idle")
-        self.status_label.setText("Ready")
+        if self._session_active:
+            self.status_label.setText("Listening for next command...")
+            _delay_ms = max(0, int(float(os.getenv('SARA_POST_TTS_DELAY', '0.6')) * 1000))
+            QTimer.singleShot(_delay_ms, self._session_listen)
+        else:
+            self.status_label.setText("Ready")
+
+    def _session_listen(self) -> None:
+        """Re-enter the recording loop within an active session (auto-listen).
+
+        Guards against double-start: no-op if the recorder is already running.
+        """
+        if self._session_active and not (self.recorder and self.recorder.isRunning()):
+            self.start_recording()
+
+    def _session_sleep(self) -> None:
+        """Deactivate the session after 3 consecutive failures.
+
+        Mirrors run_sara.py: break the conversation loop after
+        MAX_CONSECUTIVE_ERRORS, show a message, require wake word again.
+        """
+        _wake_name = "Hey Sara" if WAKE_MODEL_PATH else "Hey Jarvis"
+        self._session_active = False
+        self._session_errors = 0
+        self.status_dot.set_state("idle")
+        self.status_label.setText(f'Say "{_wake_name}" to start again.')
+        self.response_view.setPlainText(
+            "Session ended after repeated failures.\n"
+            f'Say "{_wake_name}" or press the mic button to start a new session.'
+        )
 
     @staticmethod
     def _format_plan_preview(action: dict) -> str:
@@ -1409,6 +1495,9 @@ class SaraFloatingWindow(QMainWindow):
         self.status_dot.set_state("listening")
         self.status_label.setText(f"Sara activated! ({label}, {score:.2f})")
         self.response_view.setPlainText("Sara is listening for your command...")
+        # Fresh session on every wake word: reset the consecutive-error counter
+        # so a previously-exhausted session gets a clean slate.
+        self._session_errors = 0
         self.start_recording()
 
     def on_wake_failed(self, error: str) -> None:
