@@ -1177,10 +1177,11 @@ def ensure_workbook(path, sheet_name=None):
 
     # Sheet selection is done outside the lock (wb is now a local reference).
     if sheet_name:
-        if sheet_name not in wb.sheetnames:
+        resolved_sn = _resolve_sheet_name(wb, sheet_name)
+        if resolved_sn is None:
             return wb, {"error": "sheet_not_found", "sheet": sheet_name,
                         "available": wb.sheetnames}
-        ws = wb[sheet_name]
+        ws = wb[resolved_sn]
     else:
         ws = wb.active
     return wb, ws
@@ -3403,7 +3404,7 @@ def filter_table(path, column, operator='=', value=None, sheet_name=None):
         abs_path = os.path.abspath(path)
     except Exception:
         abs_path = path
-    com_result = _com_live_filter_table(abs_path, col_idx, operator, value, sheet_name)
+    com_result = _com_live_filter_table(abs_path, col_idx, operator, value, ws.title)
     if com_result:
         msg = (
             f"Filtered to {count} row{'s' if count != 1 else ''} "

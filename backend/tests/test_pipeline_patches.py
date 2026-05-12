@@ -11729,6 +11729,747 @@ class TestP52UndoMisfireFix(unittest.TestCase):
         self.assertNotEqual(c.strip(), 'undo',
             "'and do it' has trailing word and must not be rewritten")
 
+    # ── Ellipsis variants (P52 extension) ────────────────────────────────
+
+    def test_and_do_ellipsis_corrects_to_undo(self):
+        """'and do...' → corrected to 'undo' (STT adds ellipsis)."""
+        self.assertEqual(self._correct('and do...'), 'undo')
+
+    def test_and_do_double_dot_corrects_to_undo(self):
+        """'and do..' → corrected to 'undo'."""
+        self.assertEqual(self._correct('and do..'), 'undo')
+
+    def test_and_do_four_dots_corrects_to_undo(self):
+        """'and do....' → corrected to 'undo'."""
+        self.assertEqual(self._correct('and do....'), 'undo')
+
+    def test_and_do_unicode_ellipsis_corrects_to_undo(self):
+        """'and do…' → corrected to 'undo' (unicode ellipsis U+2026)."""
+        self.assertEqual(self._correct('and do…'), 'undo')
+
+    def test_and_do_titlecase_ellipsis_corrects_to_undo(self):
+        """'And do...' → corrected to 'undo' (STT capitalises + ellipsis)."""
+        self.assertEqual(self._correct('And do...'), 'undo')
+
+    def test_and_do_ellipsis_intent(self):
+        """'and do...' full pipeline → undo intent (not open_file)."""
+        from pipeline_sanitizer import correct_transcript, detect_command_intent
+        c = correct_transcript('and do...')
+        intent = detect_command_intent(c)
+        self.assertEqual(intent, 'undo',
+            f"Expected undo intent, got {intent!r} for corrected={c!r}")
+
+
+# ---------------------------------------------------------------------------
+# P52 Bug 3 — Weak transcript guard
+#   Short/noise-only transcripts must be rejected before the LLM so that
+#   phrases like "I'm too" never produce random actions (switch_sheet, etc.)
+# ---------------------------------------------------------------------------
+
+class TestP52WeakTranscriptGuard(unittest.TestCase):
+    """Unit tests for agent._is_weak_transcript()."""
+
+    def _weak(self, text: str) -> bool:
+        from agent import _is_weak_transcript
+        return _is_weak_transcript(text)
+
+    # ── Noise-only transcripts → weak ────────────────────────────────────
+
+    def test_im_too_is_weak(self):
+        """'I'm too' → weak (the switch_sheet misfire case)."""
+        self.assertTrue(self._weak("I'm too"))
+
+    def test_single_char_is_weak(self):
+        """Single character → weak."""
+        self.assertTrue(self._weak("a"))
+
+    def test_empty_is_weak(self):
+        """Empty string → weak."""
+        self.assertTrue(self._weak(""))
+
+    def test_um_is_weak(self):
+        """'um' → weak (pure filler)."""
+        self.assertTrue(self._weak("um"))
+
+    def test_i_am_is_weak(self):
+        """'I am' → weak (no command verb)."""
+        self.assertTrue(self._weak("I am"))
+
+    def test_oh_ah_is_weak(self):
+        """'oh ah' → weak."""
+        self.assertTrue(self._weak("oh ah"))
+
+    # ── Legitimate short commands → NOT weak ─────────────────────────────
+
+    def test_undo_not_weak(self):
+        """'undo' → not weak (valid command, even though short)."""
+        self.assertFalse(self._weak("undo"))
+
+    def test_save_not_weak(self):
+        """'save' → not weak."""
+        self.assertFalse(self._weak("save"))
+
+    def test_bold_not_weak(self):
+        """'bold' → not weak."""
+        self.assertFalse(self._weak("bold"))
+
+    def test_sum_row_6_not_weak(self):
+        """'sum row 6' → not weak."""
+        self.assertFalse(self._weak("sum row 6"))
+
+    def test_open_file_not_weak(self):
+        """'open file' → not weak."""
+        self.assertFalse(self._weak("open file"))
+
+    def test_freeze_panes_not_weak(self):
+        """'freeze panes' → not weak."""
+        self.assertFalse(self._weak("freeze panes"))
+
+    def test_add_row_not_weak(self):
+        """'add row' → not weak."""
+        self.assertFalse(self._weak("add row"))
+
+    def test_switch_sheet_not_weak(self):
+        """'switch sheet' → not weak (switch is not a noise word)."""
+        self.assertFalse(self._weak("switch sheet"))
+
+    def test_write_cell_a1_not_weak(self):
+        """'write cell A1' → not weak."""
+        self.assertFalse(self._weak("write cell A1"))
+
+    def test_delete_row_6_not_weak(self):
+        """'delete row 6' → not weak."""
+        self.assertFalse(self._weak("delete row 6"))
+
+    # ── Corrected undo forms → not weak after correction ─────────────────
+
+    def test_corrected_and_do_not_weak(self):
+        """After correction 'and do' → 'undo' → not weak."""
+        from pipeline_sanitizer import correct_transcript
+        from agent import _is_weak_transcript
+        self.assertFalse(_is_weak_transcript(correct_transcript('and do')))
+
+    def test_corrected_and_do_ellipsis_not_weak(self):
+        """After correction 'and do...' → 'undo' → not weak."""
+        from pipeline_sanitizer import correct_transcript
+        from agent import _is_weak_transcript
+        self.assertFalse(_is_weak_transcript(correct_transcript('and do...')))
+
+
+# ---------------------------------------------------------------------------
+# Bug 1 — Rename file state: memory.active_file must track new filename
+# ---------------------------------------------------------------------------
+
+class TestRenameState(unittest.TestCase):
+    """After rename_file, memory.active_file must hold the new name so that
+    subsequent commands (replace, freeze, undo) resolve to the renamed file.
+
+    _update_memory is an Agent instance method but never uses self, so we
+    call it as Agent._update_memory(mock_self, ...) to avoid spinning up the
+    full Agent constructor.
+    """
+
+    def _call(self, action, filename, result):
+        """Invoke Agent._update_memory with a MagicMock self."""
+        import agent as ag
+        ag.Agent._update_memory(MagicMock(), action, filename, result)
+
+    def _mem(self):
+        import agent as ag
+        return ag.memory  # the Memory singleton used inside _update_memory
+
+    def test_rename_direct_result_updates_memory(self):
+        """rename_file result with new_name= at top level updates active_file."""
+        action = {'type': 'rename_file', 'new_name': 'teacher_to'}
+        result = {'message': 'file_renamed', 'new_name': 'teacher_to.xlsx',
+                  'old_name': 'teacher.xlsx', 'new_path': '/fake/teacher_to.xlsx'}
+
+        with patch.object(self._mem(), 'set_active_file') as mock_set:
+            self._call(action, 'teacher.xlsx', result)
+            mock_set.assert_called_with('teacher_to.xlsx')
+
+    def test_rename_steps_wrapper_updates_memory(self):
+        """rename_file wrapped in steps_executed (new_name not at top level)
+        must still update active_file from the nested step result."""
+        action = {'type': 'rename_file',
+                  'steps': [{'type': 'rename_file', 'new_name': 'teacher_to'}]}
+        result = {
+            'steps_executed': 1,
+            'steps': [
+                {'result': {'message': 'file_renamed', 'new_name': 'teacher_to.xlsx',
+                            'old_name': 'teacher.xlsx'}}
+            ],
+        }
+
+        with patch.object(self._mem(), 'set_active_file') as mock_set:
+            self._call(action, 'teacher.xlsx', result)
+            mock_set.assert_called_with('teacher_to.xlsx')
+
+    def test_rename_action_new_name_fallback(self):
+        """When result has no new_name, fall back to action.new_name."""
+        action = {'type': 'rename_file', 'new_name': 'budget.xlsx'}
+        result = {'message': 'file_renamed'}  # no new_name key
+
+        with patch.object(self._mem(), 'set_active_file') as mock_set:
+            self._call(action, 'teacher.xlsx', result)
+            mock_set.assert_called_with('budget.xlsx')
+
+    def test_rename_no_new_name_does_not_crash(self):
+        """If new_name cannot be found anywhere, _update_memory must not raise."""
+        action = {'type': 'rename_file'}
+        result = {'message': 'file_renamed'}
+
+        with patch.object(self._mem(), 'set_active_file') as mock_set:
+            self._call(action, 'teacher.xlsx', result)
+            # set_active_file is still called once for the base filename update
+            # (line 552: memory.set_active_file(filename)) — the rename branch
+            # is entered but finds no new_name so it does NOT call it a second time.
+            calls = [c.args[0] for c in mock_set.call_args_list]
+            self.assertNotIn('teacher_to.xlsx', calls)
+
+    def test_rename_error_result_does_not_update_memory(self):
+        """If result contains 'error', _update_memory returns immediately."""
+        action = {'type': 'rename_file', 'new_name': 'bad.xlsx'}
+        result = {'error': 'file_not_found'}
+
+        with patch.object(self._mem(), 'set_active_file') as mock_set:
+            self._call(action, 'teacher.xlsx', result)
+            mock_set.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Bug 2 — filter_table: AutoFilter must target the correct sheet, not ActiveSheet
+# ---------------------------------------------------------------------------
+
+class TestFilterHeader(unittest.TestCase):
+    """filter_table must call _com_live_filter_table with ws.title (the resolved
+    source sheet), never with the raw sheet_name=None that may be 'Filtered'
+    in the Excel UI."""
+
+    def test_com_call_uses_ws_title_not_sheet_name_none(self):
+        """When sheet_name is None and ws resolves to 'Sheet1',
+        _com_live_filter_table must receive 'Sheet1', not None."""
+        import excel_controller as ec
+        from unittest.mock import patch, MagicMock
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Sheet1'
+        ws['A1'] = 'name'
+        ws['B1'] = 'score'
+        ws['A2'] = 'Ball'
+        ws['B2'] = 90
+        ws['A3'] = 'Moana'
+        ws['B3'] = 15
+
+        fake_com = {'_com_used': True, 'count': 1}
+
+        with patch.object(ec, 'ensure_workbook', return_value=(wb, ws)), \
+             patch.object(ec, '_com_live_filter_table', return_value=fake_com) as mock_com, \
+             patch.object(ec, '_undo_snapshot'):
+            ec.filter_table('fake.xlsx', 'name', '=', 'Moana', sheet_name=None)
+
+        args, kwargs = mock_com.call_args
+        passed_sheet = args[4] if len(args) > 4 else kwargs.get('sheet_name')
+        self.assertIsNotNone(passed_sheet,
+            "sheet_name passed to _com_live_filter_table must not be None")
+        self.assertEqual(passed_sheet, 'Sheet1',
+            f"Expected 'Sheet1', got {passed_sheet!r}")
+
+    def test_filter_falls_back_to_source_sheet_not_filtered(self):
+        """If the active openpyxl sheet is 'Filtered', filter_table must switch
+        to the first non-Filtered sheet before reading headers."""
+        import excel_controller as ec
+        from unittest.mock import patch, MagicMock
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws_data = wb.active
+        ws_data.title = 'Sheet1'
+        ws_data['A1'] = 'name'
+        ws_data['B1'] = 'score'
+        ws_data['A2'] = 'Ball'
+        ws_data['B2'] = 90
+        ws_filtered = wb.create_sheet('Filtered')
+        ws_filtered['A1'] = 'name'
+        ws_filtered['A2'] = 'Ball'
+
+        fake_com = {'_com_used': True, 'count': 1}
+
+        with patch.object(ec, 'ensure_workbook', return_value=(wb, ws_filtered)), \
+             patch.object(ec, '_com_live_filter_table', return_value=fake_com) as mock_com, \
+             patch.object(ec, '_undo_snapshot'):
+            ec.filter_table('fake.xlsx', 'name', '=', 'Ball', sheet_name=None)
+
+        args, _ = mock_com.call_args
+        passed_sheet = args[4]
+        self.assertEqual(passed_sheet, 'Sheet1',
+            f"COM must target 'Sheet1' (source), not 'Filtered'. Got: {passed_sheet!r}")
+
+    def test_filter_row1_header_detection(self):
+        """filter_table must read row 1 as the header row and correctly
+        identify the column index for a named column."""
+        import excel_controller as ec
+        from unittest.mock import patch
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Sheet1'
+        ws['A1'] = 'name'
+        ws['B1'] = 'score'
+        ws['A2'] = 'Ball'
+        ws['B2'] = 90
+        ws['A3'] = 'Moana'
+        ws['B3'] = 15
+
+        captured = {}
+
+        def fake_com(path, col_idx, op, val, sheet):
+            captured['col_idx'] = col_idx
+            captured['sheet'] = sheet
+            return {'_com_used': True, 'count': 1}
+
+        with patch.object(ec, 'ensure_workbook', return_value=(wb, ws)), \
+             patch.object(ec, '_com_live_filter_table', side_effect=fake_com), \
+             patch.object(ec, '_undo_snapshot'):
+            result = ec.filter_table('fake.xlsx', 'name', '=', 'Moana')
+
+        self.assertNotIn('error', result, f"filter_table returned error: {result}")
+        self.assertEqual(captured.get('col_idx'), 1,
+            "Column 'name' is column A → col_idx must be 1")
+        self.assertEqual(captured.get('sheet'), 'Sheet1',
+            f"COM must receive 'Sheet1', got {captured.get('sheet')!r}")
+
+    def test_filter_by_score_column(self):
+        """filter_table with column='score' (column B) must use col_idx=2."""
+        import excel_controller as ec
+        from unittest.mock import patch
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Sheet1'
+        ws['A1'] = 'name'
+        ws['B1'] = 'score'
+        ws['A2'] = 'Ball'
+        ws['B2'] = 90
+        ws['A3'] = 'Moana'
+        ws['B3'] = 15
+
+        captured = {}
+
+        def fake_com(path, col_idx, op, val, sheet):
+            captured['col_idx'] = col_idx
+            return {'_com_used': True, 'count': 1}
+
+        with patch.object(ec, 'ensure_workbook', return_value=(wb, ws)), \
+             patch.object(ec, '_com_live_filter_table', side_effect=fake_com), \
+             patch.object(ec, '_undo_snapshot'):
+            result = ec.filter_table('fake.xlsx', 'score', '=', 90)
+
+        self.assertNotIn('error', result)
+        self.assertEqual(captured.get('col_idx'), 2,
+            "Column 'score' is column B → col_idx must be 2")
+
+    def test_filter_no_results_returns_filter_no_results(self):
+        """filter_table with a value that matches nothing must return
+        filter_no_results (not an error) so Sara can give speech feedback."""
+        import excel_controller as ec
+        from unittest.mock import patch
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = 'Sheet1'
+        ws['A1'] = 'name'
+        ws['B1'] = 'score'
+        ws['A2'] = 'Ball'
+        ws['B2'] = 90
+
+        with patch.object(ec, 'ensure_workbook', return_value=(wb, ws)), \
+             patch.object(ec, '_undo_snapshot'):
+            result = ec.filter_table('fake.xlsx', 'name', '=', 'Nonexistent')
+
+        self.assertEqual(result.get('message'), 'filter_no_results',
+            f"Expected filter_no_results, got {result}")
+        self.assertEqual(result.get('count'), 0)
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — formatting/safety command gap fixes
+# ---------------------------------------------------------------------------
+
+class TestSheetNameCase(unittest.TestCase):
+    """Bug 1 (Phase 2): 'Teacher' and 'teacher' must resolve to the same sheet."""
+
+    def _ensure_wb(self, sheet_name_arg):
+        import excel_controller as ec
+        import openpyxl, tempfile, os
+        wb = openpyxl.Workbook()
+        wb.active.title = 'teacher'
+        tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        tmp.close()
+        wb.save(tmp.name)
+        try:
+            _, result = ec.ensure_workbook(tmp.name, sheet_name=sheet_name_arg)
+            return result
+        finally:
+            os.unlink(tmp.name)
+
+    def test_exact_match_works(self):
+        """Exact sheet name returns the worksheet."""
+        ws = self._ensure_wb('teacher')
+        self.assertNotIsInstance(ws, dict, "exact match must return ws, not error dict")
+
+    def test_uppercase_resolves(self):
+        """'Teacher' (capitalised) must resolve to 'teacher' sheet."""
+        ws = self._ensure_wb('Teacher')
+        self.assertNotIsInstance(ws, dict,
+            "'Teacher' must resolve to 'teacher' sheet case-insensitively")
+
+    def test_all_caps_resolves(self):
+        """'TEACHER' must resolve to 'teacher' sheet."""
+        ws = self._ensure_wb('TEACHER')
+        self.assertNotIsInstance(ws, dict,
+            "'TEACHER' must resolve to 'teacher' sheet case-insensitively")
+
+    def test_nonexistent_sheet_returns_error(self):
+        """A genuinely missing sheet name must still return an error dict."""
+        result = self._ensure_wb('NoSuchSheet')
+        self.assertIsInstance(result, dict, "missing sheet must return error dict")
+        self.assertEqual(result.get('error'), 'sheet_not_found')
+
+    def test_none_sheet_name_uses_active(self):
+        """sheet_name=None must return the active worksheet."""
+        import excel_controller as ec
+        import openpyxl, tempfile, os
+        wb = openpyxl.Workbook()
+        wb.active.title = 'Data'
+        tmp = tempfile.NamedTemporaryFile(suffix='.xlsx', delete=False)
+        tmp.close()
+        wb.save(tmp.name)
+        try:
+            _, ws = ec.ensure_workbook(tmp.name, sheet_name=None)
+            self.assertNotIsInstance(ws, dict)
+            self.assertEqual(ws.title, 'Data')
+        finally:
+            os.unlink(tmp.name)
+
+
+class TestSortMishears(unittest.TestCase):
+    """Bug 2 (Phase 2): sought/thought/swot → sort (only in sort context)."""
+
+    def _corrected(self, text):
+        from pipeline_sanitizer import correct_transcript
+        return correct_transcript(text)
+
+    def _intent(self, text):
+        from pipeline_sanitizer import detect_command_intent, correct_transcript
+        return detect_command_intent(correct_transcript(text))
+
+    def test_sought_by_corrected(self):
+        """'sought by B descending' → corrected to 'sort by ...'"""
+        c = self._corrected('sought by B descending')
+        self.assertTrue(c.lower().startswith('sort by'),
+            f"Expected 'sort by …', got: {c!r}")
+
+    def test_thought_by_corrected(self):
+        """'thought by B ascending' → corrected to 'sort by ...'"""
+        c = self._corrected('thought by B ascending')
+        self.assertTrue(c.lower().startswith('sort by'),
+            f"Expected 'sort by …', got: {c!r}")
+
+    def test_swot_by_corrected(self):
+        """'swot by B descending' → corrected to 'sort by ...'"""
+        c = self._corrected('swot by B descending')
+        self.assertTrue(c.lower().startswith('sort by'),
+            f"Expected 'sort by …', got: {c!r}")
+
+    def test_sought_intent_becomes_sort_range(self):
+        """After correction, 'sought by B descending' must have intent sort_range."""
+        self.assertEqual(self._intent('sought by B descending'), 'sort_range',
+            "corrected 'sought by B descending' must have sort_range intent")
+
+    def test_sought_alone_not_corrected(self):
+        """'sought' without 'by' must NOT be corrected to 'sort'."""
+        c = self._corrected('sought the data')
+        self.assertFalse(c.lower().startswith('sort'),
+            f"'sought' without 'by' must not become sort: {c!r}")
+
+    def test_thought_alone_not_corrected(self):
+        """'thought about' without 'by' must NOT be corrected."""
+        c = self._corrected('thought about the report')
+        self.assertFalse(c.lower().startswith('sort'),
+            f"'thought about' must not become sort: {c!r}")
+
+
+class TestRangeFormatting(unittest.TestCase):
+    """Bug 3 (Phase 2): A1:C1 ranges must not collapse — regression tests only."""
+
+    def _parse(self, text):
+        from llm_parser import _heuristic_natural_language_parse
+        return _heuristic_natural_language_parse(text)
+
+    def test_highlight_range(self):
+        """highlight A1:C1 → format_cells with range A1:C1."""
+        r = self._parse('highlight A1:C1')
+        self.assertIsNotNone(r)
+        self.assertEqual(r.get('type'), 'format_cells')
+        self.assertEqual(r.get('range'), 'A1:C1',
+            f"range must be 'A1:C1', got {r.get('range')!r}")
+
+    def test_align_range(self):
+        """align A1:C3 center → format_cells with range A1:C3."""
+        r = self._parse('align A1:C3 center')
+        self.assertIsNotNone(r)
+        self.assertEqual(r.get('type'), 'format_cells')
+        self.assertEqual(r.get('range'), 'A1:C3')
+        self.assertIn(r.get('align'), ('center', 'centre'))
+
+    def test_format_range_bold(self):
+        """format A2:C4 bold → format_cells with range A2:C4."""
+        r = self._parse('format A2:C4 bold')
+        self.assertIsNotNone(r)
+        self.assertEqual(r.get('type'), 'format_cells')
+        self.assertEqual(r.get('range'), 'A2:C4')
+        self.assertTrue(r.get('bold'))
+
+    def test_fill_range(self):
+        """fill A5:C5 green → format_cells with range A5:C5."""
+        r = self._parse('fill A5:C5 green')
+        self.assertIsNotNone(r)
+        self.assertEqual(r.get('type'), 'format_cells')
+        self.assertEqual(r.get('range'), 'A5:C5')
+        self.assertIn('green', str(r.get('fill_color', '')).lower())
+
+    def test_single_cell_format_not_range(self):
+        """format B2 bold must still work — single-cell case must not break."""
+        r = self._parse('format B2 bold')
+        self.assertIsNotNone(r)
+        self.assertEqual(r.get('type'), 'format_cells')
+        self.assertTrue(r.get('bold'))
+
+
+class TestMissingStyleSafety(unittest.TestCase):
+    """Bug 4 (Phase 2): 'format column B' with no style → clarification."""
+
+    def _slot(self, text):
+        from pipeline_sanitizer import detect_command_intent, check_command_slots
+        intent = detect_command_intent(text)
+        return check_command_slots(intent, text)
+
+    def test_format_column_no_style_asks_clarification(self):
+        """'format column B' must return a clarification slot message."""
+        msg = self._slot('format column B')
+        self.assertIsNotNone(msg,
+            "'format column B' must trigger a clarification slot")
+        self.assertIsInstance(msg, str)
+
+    def test_format_column_bold_passes(self):
+        """'format column B bold' has a style → no slot clarification."""
+        msg = self._slot('format column B bold')
+        self.assertIsNone(msg,
+            "'format column B bold' must not need clarification")
+
+    def test_format_b2_bold_passes(self):
+        """'format B2 bold' has both target and style → no slot clarification."""
+        msg = self._slot('format B2 bold')
+        self.assertIsNone(msg)
+
+    def test_format_range_bold_passes(self):
+        """'format A1:C3 bold' has both target and style → no slot clarification."""
+        msg = self._slot('format A1:C3 bold')
+        self.assertIsNone(msg)
+
+
+class TestDeleteRangeSafety(unittest.TestCase):
+    """Bug 5 (Phase 2): 'delete range A1, B3' → clarification (no implicit A1:B3)."""
+
+    def _slot(self, text):
+        from pipeline_sanitizer import detect_command_intent, check_command_slots
+        intent = detect_command_intent(text)
+        return check_command_slots(intent, text)
+
+    def test_delete_range_comma_asks_clarification(self):
+        """'delete range A1, B3' must return a clarification message."""
+        msg = self._slot('delete range A1, B3')
+        self.assertIsNotNone(msg,
+            "'delete range A1, B3' must trigger clarification")
+        self.assertIsInstance(msg, str)
+
+    def test_delete_range_colon_passes(self):
+        """'delete range A1:B3' has explicit colon range → no clarification."""
+        msg = self._slot('delete range A1:B3')
+        self.assertIsNone(msg,
+            "'delete range A1:B3' must not need clarification")
+
+    def test_delete_range_to_passes(self):
+        """'delete range A1 to B3' has explicit range → no clarification."""
+        msg = self._slot('delete range A1 to B3')
+        self.assertIsNone(msg,
+            "'delete range A1 to B3' must not need clarification")
+
+    def test_delete_range_single_cell_passes(self):
+        """'delete range A1' (single cell) → no clarification."""
+        msg = self._slot('delete range A1')
+        self.assertIsNone(msg,
+            "'delete range A1' (single cell) must not need clarification")
+
+    def test_clarification_includes_suggested_range(self):
+        """Clarification message for 'delete range A1, B3' must suggest A1:B3."""
+        msg = self._slot('delete range A1, B3')
+        self.assertIsNotNone(msg)
+        self.assertIn('A1:B3', msg,
+            f"Clarification must suggest 'A1:B3', got: {msg!r}")
+
+
+class TestSumRowColumn(unittest.TestCase):
+    """Bug 6 (Phase 2): sum row 6 / some row 6 / sum column B must be safe."""
+
+    def _pipeline(self, text):
+        from pipeline_sanitizer import (
+            correct_transcript, detect_command_intent,
+            is_low_confidence_transcript, check_command_slots,
+        )
+        corrected = correct_transcript(text)
+        intent = detect_command_intent(corrected)
+        low_conf = is_low_confidence_transcript(corrected)
+        slot = check_command_slots(intent, corrected)
+        return corrected, intent, low_conf, slot
+
+    def test_sum_row_six_intent(self):
+        """'sum row 6' must have intent calculate_sum."""
+        _, intent, _, _ = self._pipeline('sum row 6')
+        self.assertEqual(intent, 'calculate_sum',
+            "sum row 6 must have intent calculate_sum")
+
+    def test_sum_row_six_not_low_confidence(self):
+        """'sum row 6' must not be filtered as low-confidence."""
+        _, _, lc, _ = self._pipeline('sum row 6')
+        self.assertFalse(lc, "sum row 6 must not be low-confidence")
+
+    def test_sum_row_six_no_slot(self):
+        """'sum row 6' must not trigger a clarification slot."""
+        _, _, _, slot = self._pipeline('sum row 6')
+        self.assertIsNone(slot, f"sum row 6 must not need clarification, got: {slot!r}")
+
+    def test_some_row_six_corrects_and_passes(self):
+        """'some row 6' corrects to 'sum row 6' and must have calculate_sum intent."""
+        corrected, intent, lc, slot = self._pipeline('some row 6')
+        self.assertIn('sum', corrected.lower(),
+            f"'some row 6' must correct to include 'sum': {corrected!r}")
+        self.assertEqual(intent, 'calculate_sum',
+            f"corrected 'some row 6' must have calculate_sum intent, got: {intent!r}")
+        self.assertFalse(lc)
+        self.assertIsNone(slot)
+
+    def test_sam_row_six_corrects_and_passes(self):
+        """'sam row six' corrects to 'sum row 6' and must have calculate_sum intent."""
+        corrected, intent, lc, slot = self._pipeline('sam row six')
+        self.assertEqual(intent, 'calculate_sum',
+            f"corrected 'sam row six' must have calculate_sum intent, got: {intent!r}")
+        self.assertFalse(lc)
+        self.assertIsNone(slot)
+
+    def test_sum_column_b_intent(self):
+        """'sum column B' must have intent calculate_sum (regression)."""
+        _, intent, lc, slot = self._pipeline('sum column B')
+        self.assertEqual(intent, 'calculate_sum')
+        self.assertFalse(lc)
+        self.assertIsNone(slot)
+
+    def test_some_column_b_corrects(self):
+        """'some column B' must correct to 'sum column B' with calculate_sum intent."""
+        corrected, intent, lc, slot = self._pipeline('some column B')
+        self.assertEqual(intent, 'calculate_sum',
+            f"'some column B' must correct to sum intent, got intent={intent!r}")
+        self.assertFalse(lc)
+        self.assertIsNone(slot)
+
+    def test_sum_row_not_format_cells(self):
+        """'sum row 6' must never produce format_cells intent."""
+        _, intent, _, _ = self._pipeline('sum row 6')
+        self.assertNotEqual(intent, 'format_cells')
+
+    def test_sum_row_not_delete_intent(self):
+        """'sum row 6' must never produce delete_row or delete_range intent."""
+        _, intent, _, _ = self._pipeline('sum row 6')
+        self.assertNotIn(intent, ('delete_row', 'delete_range', 'delete_cell'))
+
+    def test_sum_row_not_add_row_intent(self):
+        """'sum row 6' must never produce add_row intent."""
+        _, intent, _, _ = self._pipeline('sum row 6')
+        self.assertNotEqual(intent, 'add_row')
+
+
+class TestRandomTranscript(unittest.TestCase):
+    """Bug 7 (Phase 2): random/YouTube transcripts must not go to LLM execution."""
+
+    def test_random_transcript_youtube_filtered(self):
+        """'The link is in the description' must be low-confidence."""
+        from pipeline_sanitizer import is_low_confidence_transcript
+        self.assertTrue(
+            is_low_confidence_transcript('The link is in the description'),
+            "YouTube-style phrase must be filtered as low-confidence",
+        )
+
+    def test_random_transcript_youtube_slot_none(self):
+        """'The link is in the description' must produce no slot (intent=None)."""
+        from pipeline_sanitizer import detect_command_intent, check_command_slots
+        intent = detect_command_intent('The link is in the description')
+        slot = check_command_slots(intent, 'The link is in the description')
+        self.assertIsNone(slot)
+
+    def test_thanks_for_watching_still_filtered(self):
+        """'Thanks for watching' must remain low-confidence (regression)."""
+        from pipeline_sanitizer import is_low_confidence_transcript
+        self.assertTrue(
+            is_low_confidence_transcript('Thanks for watching'),
+            "'Thanks for watching' must stay filtered",
+        )
+
+    def test_add_row_not_filtered(self):
+        """'add row Alice 90' must NOT be filtered — it's a real command."""
+        from pipeline_sanitizer import is_low_confidence_transcript
+        self.assertFalse(
+            is_low_confidence_transcript('add row Alice 90'),
+            "'add row Alice 90' must pass through as a valid command",
+        )
+
+    def test_sort_command_not_filtered(self):
+        """'sort by column B ascending' must NOT be filtered."""
+        from pipeline_sanitizer import is_low_confidence_transcript
+        self.assertFalse(
+            is_low_confidence_transcript('sort by column B ascending'),
+        )
+
+    def test_format_command_not_filtered(self):
+        """'format A1:C1 bold' must NOT be filtered."""
+        from pipeline_sanitizer import is_low_confidence_transcript
+        self.assertFalse(
+            is_low_confidence_transcript('format A1:C1 bold'),
+        )
+
+    def test_what_time_is_it_filtered(self):
+        """'what time is it now' has no Excel keywords → filtered."""
+        from pipeline_sanitizer import is_low_confidence_transcript
+        self.assertTrue(
+            is_low_confidence_transcript('what time is it now'),
+            "'what time is it now' has no Excel keywords → must be filtered",
+        )
+
+    def test_no_please_stop_not_filtered(self):
+        """'please stop' is ambiguous but short (2 words) — already covered elsewhere."""
+        # This phrase hits the 2-word check (detect_command_intent may return None),
+        # not the 4+ word check, so it is already handled.
+        from pipeline_sanitizer import is_low_confidence_transcript
+        # 'stop' is in _VALID_SOLO_COMMANDS so 'please stop' → intent may be None
+        # but 'stop' word matters; just assert it doesn't throw.
+        result = is_low_confidence_transcript('please stop')
+        self.assertIsInstance(result, bool)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

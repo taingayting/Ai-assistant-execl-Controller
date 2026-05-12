@@ -100,6 +100,7 @@ class UploadResult:
     error: str = ""
     suggestions: list = field(default_factory=list)
     workflow_id: str | None = None
+    gen: int = 0  # upload generation; stale results are discarded in on_upload_completed
 
 
 class RecorderThread(QThread):
@@ -171,12 +172,14 @@ class UploadWorker(QThread):
 
     completed = pyqtSignal(object)
 
-    def __init__(self, wav_bytes: bytes):
+    def __init__(self, wav_bytes: bytes, gen: int = 0):
         super().__init__()
         self.wav_bytes = wav_bytes
+        self._gen = gen
 
     def run(self) -> None:
         result = self._upload_audio(self.wav_bytes)
+        result.gen = self._gen  # stamp so on_upload_completed can detect stale results
         self.completed.emit(result)
 
     def _upload_audio(self, wav_bytes: bytes) -> UploadResult:
@@ -577,6 +580,7 @@ class SaraFloatingWindow(QMainWindow):
         # retry on failure, sleep after 3 consecutive failures.
         self._session_active: bool = False  # True while in a voice command session
         self._session_errors: int = 0       # consecutive STT/parse failures this session
+        self._upload_gen: int = 0           # incremented each recording; stale results are dropped
 
         # Timers drive lightweight UI animations while recording/processing.
         self._mic_anim_timer = QTimer(self)
@@ -1120,6 +1124,14 @@ class SaraFloatingWindow(QMainWindow):
     def start_recording(self) -> None:
         if self.recorder is not None and self.recorder.isRunning():
             return
+        # Do not start a new recording while the previous upload or execution is
+        # still in flight — this prevents interleaved pipelines and out-of-order
+        # results from session auto-listen triggers firing too early.
+        if self.uploader is not None and self.uploader.isRunning():
+            return
+        if getattr(self, '_execute_worker', None) is not None and self._execute_worker.isRunning():
+            return
+        self._upload_gen += 1   # new recording cycle — stale results from prev cycle are ignored
         self._cmd_start = time.perf_counter()
         # Activate a fresh session when none is running (manual mic click or
         # first call from on_wake_detected before _session_active was set).
@@ -1159,7 +1171,7 @@ class SaraFloatingWindow(QMainWindow):
         self.status_label.setText("Transcribing...")
         self.transcript_view.setPlainText("Transcribing...")
         self._start_thinking_indicator("Transcribing")
-        self.uploader = UploadWorker(wav_bytes)
+        self.uploader = UploadWorker(wav_bytes, gen=self._upload_gen)
         self.uploader.completed.connect(self.on_upload_completed)
         self.uploader.start()
         # Safety timeout: re-enable mic if upload never completes (e.g. thread crash)
@@ -1185,6 +1197,11 @@ class SaraFloatingWindow(QMainWindow):
         QMessageBox.warning(self, "Recording Error", error)
 
     def on_upload_completed(self, result: UploadResult) -> None:
+        # Stale-result guard: if a newer recording cycle started while this
+        # upload was in flight, discard the result silently.  Prevents
+        # out-of-order actions when two pipelines overlap.
+        if result.gen != self._upload_gen:
+            return
         if hasattr(self, '_upload_safety_timer'):
             self._upload_safety_timer.stop()
         self._stop_thinking_indicator()

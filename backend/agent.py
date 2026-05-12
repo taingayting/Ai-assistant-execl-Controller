@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import time
 from dataclasses import dataclass, field
@@ -116,6 +117,35 @@ class AgentResult:
         return d
 
 
+# --------------- Weak-transcript guard ---------------
+# Transcripts that consist only of filler/function words carry no actionable
+# intent.  Sending them to the LLM risks a spurious action (e.g. "I'm too"
+# → switch_sheet).  Catching them here prevents a wasted LLM round-trip and
+# returns a clean "retry" response instead.
+_NOISE_WORDS: frozenset[str] = frozenset({
+    "i", "im", "am", "a", "an", "the", "um", "uh", "oh", "ah", "hmm",
+    "so", "and", "but", "to", "too", "two", "of", "it", "is",
+    "was", "are", "were", "be", "been", "being", "have", "had",
+    "has", "do", "did", "does", "done", "my", "me", "we", "you",
+    "he", "she", "they", "this", "that", "in", "on", "at",
+    "by", "for", "with", "as", "if", "or", "not", "no", "yes",
+})
+
+
+def _is_weak_transcript(text: str) -> bool:
+    """Return True if *text* is pure noise/filler with no actionable content.
+
+    Conservative: only returns True for very short strings or transcripts
+    whose every token is a known noise/filler word.  Legitimate short commands
+    ("undo", "save", "bold") all contain non-noise tokens and pass through.
+    """
+    stripped = re.sub(r"[^\w\s]", "", text.strip().lower())
+    if len(stripped) < 3:
+        return True
+    words = set(stripped.split())
+    return bool(words) and words.issubset(_NOISE_WORDS)
+
+
 class Agent:
     """Sara agent — stateless orchestrator (state lives in *memory* singleton)."""
 
@@ -150,6 +180,19 @@ class Agent:
         if corrected != text:
             log.info('handle_text: transcript corrected %r → %r', text[:80], corrected[:80])
         text = corrected
+
+        # Weak-transcript guard: bail out before the LLM if the transcript
+        # carries no actionable content (pure filler / STT noise).
+        # This prevents "I'm too" → switch_sheet and similar spurious actions.
+        if _is_weak_transcript(text):
+            log.info('handle_text: transcript %r is weak — returning retry', text[:80])
+            return AgentResult(
+                success=False,
+                action={"type": "unknown"},
+                error="weak_transcript",
+                speech_text="I didn't catch a command. Please try again.",
+            )
+
         enriched = _enrich_text_with_context(text)
         _t_route = time.perf_counter()
         try:
@@ -538,7 +581,22 @@ class Agent:
         elif atype == 'rename_file' and isinstance(result, dict) and 'error' not in result:
             # active_file must point at the new filename so subsequent commands
             # resolve to the renamed file rather than the (now-deleted) old path.
-            new_name = result.get('new_name', action.get('new_name'))
+            new_name = result.get('new_name')
+            if new_name is None:
+                # steps_executed wrapper: extract new_name from first step result
+                for step in result.get('steps', []):
+                    if isinstance(step, dict):
+                        new_name = step.get('result', {}).get('new_name')
+                        if new_name:
+                            break
+            if new_name is None:
+                new_name = action.get('new_name')
+            if new_name is None:
+                for step in action.get('steps', []):
+                    if isinstance(step, dict):
+                        new_name = step.get('new_name')
+                        if new_name:
+                            break
             if new_name:
                 memory.set_active_file(new_name)
 

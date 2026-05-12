@@ -915,6 +915,9 @@ _TRANSCRIPT_CORRECTIONS: list[tuple[re.Pattern, str]] = [
     # Both anchored to ^ and require trailing "by\b" so "short by the way" is safe.
     (re.compile(r'^(?:swap|sword)\s+by\b', re.IGNORECASE), 'sort by'),
     (re.compile(r'^short\s+by\b', re.IGNORECASE), 'sort by'),
+    # "sought/thought/swot by B" → "sort by B" — phonetic mishears of "sort"
+    # anchored to ^ and requiring trailing "by\b" so only sort-context phrases match.
+    (re.compile(r'^(?:sought|thought|swot)\s+by\b', re.IGNORECASE), 'sort by'),
     # "start by B ascending/descending" — tight lookahead prevents matching common
     # English "start by doing X" constructions.
     (re.compile(
@@ -1079,7 +1082,7 @@ _COMMAND_PREFIX_PATTERNS: list[tuple[re.Pattern, str]] = [
     # Restricted to standalone utterances so "I do the work" is never touched.
     (re.compile(r'^i\s+do\s*$', re.IGNORECASE), 'undo'),
     (re.compile(r'^unto\s*$', re.IGNORECASE), 'undo'),
-    (re.compile(r'^and\s+do[.,!?]?\s*$', re.IGNORECASE), 'undo'),
+    (re.compile(r'^and\s+do[.,!?…]*\s*$', re.IGNORECASE), 'undo'),
     # "merge cells" family
     (re.compile(r'^(merge|combine)\s+(?:the\s+)?cells?\b', re.IGNORECASE), 'merge cells'),
     # "freeze / unfreeze panes"
@@ -1353,6 +1356,8 @@ _INTENT_PATTERNS: dict[str, list[re.Pattern]] = {
         re.compile(r'\bsum\s+(of\s+)?(column|the)\b', re.IGNORECASE),
         # "sum B2 to B5 into C6" / "sum B2 to B5 in tubes" — bare "sum" + cell ref
         re.compile(r'\bsum\s+[A-Za-z]\d+\b', re.IGNORECASE),
+        # "sum row 6" / "sum row six" (after number-word correction) — row target
+        re.compile(r'\bsum\s+row\s+\d+\b', re.IGNORECASE),
     ],
     'calculate_average': [
         re.compile(r'\b(calculate|calc)\s+(average|avg|avr)\b', re.IGNORECASE),
@@ -1723,6 +1728,24 @@ def is_low_confidence_transcript(text: str) -> bool:
     # Short transcript composed entirely of profanity — reject as noise
     if len(words) <= 3 and all(w in _PROFANITY_TOKENS for w in words):
         return True
+
+    # 4+ word phrase with no detectable intent AND no Excel command keyword
+    # (e.g. "The link is in the description", "Thanks for watching my video").
+    # Real commands almost always contain at least one command keyword; this
+    # guard catches arbitrary speech captured during ambient noise.
+    if len(words) >= 4 and detect_command_intent(text) is None:
+        _CMD_KW_EXT: frozenset[str] = frozenset({
+            'add', 'write', 'save', 'open', 'close', 'delete', 'create',
+            'switch', 'go', 'read', 'calculate', 'sort', 'format', 'merge',
+            'freeze', 'unfreeze', 'undo', 'rename', 'insert', 'find',
+            'replace', 'filter', 'set', 'sum', 'average',
+            'column', 'row', 'cell', 'sheet',
+            'bold', 'make', 'italic', 'header', 'width', 'font',
+            'center', 'align', 'color', 'colour', 'increase', 'decrease',
+            'highlight', 'clear', 'fill', 'auto', 'fit', 'resize',
+        })
+        if not any(w in _CMD_KW_EXT for w in words):
+            return True
 
     return False
 
@@ -2430,10 +2453,12 @@ def check_command_slots(intent: str | None, text: str,
                 return f"Which color? For example: {_verb} A3 orange."
 
     elif intent == 'calculate_sum':
-        # Need a cell ref (e.g. B2) OR a column reference (e.g. column A) to identify the range.
+        # Need a cell ref (e.g. B2), column reference (e.g. column A), or row
+        # reference (e.g. row 6) to identify the range.
         cell_refs = re.findall(r'\b[A-Za-z]\d+\b', text)
         has_column_ref = bool(re.search(r'\bcolumn\s+[A-Za-z]\b', lower))
-        if not cell_refs and not has_column_ref:
+        has_row_ref = bool(re.search(r'\brow\s+\d+\b', lower))
+        if not cell_refs and not has_column_ref and not has_row_ref:
             return (
                 "Which cells should I sum? "
                 "For example: sum B2 to B5 into C6."
@@ -2542,6 +2567,19 @@ def check_command_slots(intent: str | None, text: str,
             return (
                 f"Did you mean column B? "
                 f"If you meant column {_col}, please say it again clearly."
+            )
+
+    elif intent == 'delete_range':
+        # "delete range A1, B3" — comma-separated refs are ambiguous (two cells vs a range).
+        # Require an explicit colon range (A1:B3) or "A1 to B3" before executing.
+        if re.search(r'\b[A-Za-z]\d+\s*,\s*[A-Za-z]\d+\b', lower):
+            _refs = re.findall(r'\b([A-Za-z]\d+)\b', lower)
+            _suggested = (
+                f"{_refs[0].upper()}:{_refs[1].upper()}" if len(_refs) >= 2 else "A1:B3"
+            )
+            return (
+                f"Did you mean to delete the range {_suggested}? "
+                f"Please confirm with 'delete range {_suggested}'."
             )
 
     return None
