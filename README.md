@@ -107,172 +107,90 @@ Triggered directly via `python backend/run_sara.py`. This mode bypasses graphica
 The parsing pipeline natively supports natural language flexibilities across these primary syntax targets. Commands can be directly spoken into the interface or issued via client endpoints.
 
 ### 1. File & Workbook Management
-
 | Target Operation | Example Spoken Voice Command | Functional Description |
-| --- | --- | --- |
-| **Create File** | `create excel sales.xlsx` | Creates a completely new workbook container with the specified filename.
-
- |
+| :--- | :--- | :--- |
+| **Create File** | `create excel sales.xlsx` | Creates a completely new workbook container with the specified filename[cite: 10]. |
 | **Launch App** | `open excel` | Instantiates Microsoft Excel or reveals the working project directory. |
 | **Open Target** | `open file filterr.xlsx` | Targets, reads, and loads a specific workbook file structure into session memory. |
 | **Rename File** | `rename file to test_rename_deo.xlsx` | Safe hot-swapping of the physical workbook filename on disk storage. |
-| **Save Workbook** | `save` | Forces the system to commit all active memory cells securely onto disk storage.
-
- |
+| **Save Workbook**| `save` | Forces the system to commit all active memory cells securely onto disk storage. |
 | **Terminate App** | `close excel` | Commits remaining data frames and safely closes active execution handles. |
 
-### 2. Structural Row & Column Modifications
-
+### 2. Row & Column Modifications
 | Target Operation | Example Spoken Voice Command | Functional Description |
-| --- | --- | --- |
-| **Append Row** | `add row Mine 90` | Appends a fresh row entry populated with specified text and value arrays.
-
- |
+| :--- | :--- | :--- |
+| **Append Row** | `add row Mine 90` | Appends a fresh row entry populated with specified text and value arrays. |
 | **Insert Row** | `insert row 1` | Injects an empty structural row precisely at the specified vertical index slot. |
-| **Append Columns** | `add column Name Score Age` | Expands workspace bounds by generating multiple column headers at once.
-
- |
+| **Append Columns**| `add column Name Score Age` | Expands workspace bounds by generating multiple column headers at once[cite: 6, 10]. |
 | **Insert Column** | `insert column B` | Injects an empty vertical data vector precisely at the specified column letter. |
 
 ### 3. Granular Cell Assertions & Deletions
-
 | Target Operation | Example Spoken Voice Command | Functional Description |
-| --- | --- | --- |
+| :--- | :--- | :--- |
 | **Write Cell** | `write cell C1 Name` | Writes plaintext or numerical attributes to exact coordinate keys. |
-| **Set Cell Value** | `set cell D1 Test` | Targets an individual cell block grid coordinate to overwrite its value array. |
+| **Set Cell Value**| `set cell D1 Test` | Targets an individual cell block grid coordinate to overwrite its value array. |
 | **Clear Range** | `delete range A1:B3` | Truncates cellular data matrices cleanly while keeping cell structures intact. |
-| **Delete Row** | `delete row 5` | Purges the entire target vertical data line and shifts rows upward.
-
- |
+| **Delete Row** | `delete row 5` | Purges the entire target vertical data line and shifts rows upward. |
 | **Delete Column** | `delete column C` | Drops the designated column vector entirely and recalculates grid letters. |
 | **Clear Cell** | `delete cell A2` | Flushes structural data contents inside a singular target cell block. |
 
 ### 4. Mathematical Formula Injection
-
 | Target Operation | Example Spoken Voice Command | Functional Description |
-| --- | --- | --- |
-| **Calculate Mean** | `average B2:B5 into C7` | Processes an explicit mathematical mean and routes the formula output.
-
- |
-| **Calculate Total** | `sum B2:B5 into C5` | Compiles targets into an automated arithmetic summation sequence block.
-
- |
+| :--- | :--- | :--- |
+| **Calculate Mean**| `average B2:B5 into C7` | Processes an explicit mathematical mean and routes the formula output[cite: 7]. |
+| **Calculate Total**| `sum B2:B5 into C5` | Compiles targets into an automated arithmetic summation sequence block[cite: 8]. |
 
 ### 5. Formatting, Layout Styling & Alignments
-
 | Category Target | Example Spoken Voice Command | Functional Description |
-| --- | --- | --- |
-| **Cell Typography** | `bold A1` | `italic C6` | Sets clean styling structures onto targeted grid tracking nodes.
-
- |
-| **Row Typography** | `bold row 6` | `format row 3 bold` | Changes entire structural row weights simultaneously.
-
- |
-| **Col Typography** | `italic column C` | `format column D bold` | Scales formatting configurations down an entire vertical dataset.
-
- |
-| **Grid Alignment** | `center B2` | `center column B` | Justifies elements evenly along the document center axis. |
-| **Bound Alignment** | `align A2:B2 right` | `align row 3 left` | Aligns text properties to chosen page boundary orientations. |
+| :--- | :--- | :--- |
+| **Cell Typography**| `bold A1` \| `italic C6` | Sets clean styling structures onto targeted grid tracking nodes[cite: 11]. |
+| **Row Typography** | `bold row 6` \| `format row 3 bold` | Changes entire structural row weights simultaneously[cite: 11]. |
+| **Col Typography** | `italic column C` \| `format column D bold` | Scales formatting configurations down an entire vertical dataset[cite: 11]. |
+| **Grid Alignment** | `center B2` \| `center column B` | Justifies elements evenly along the document center axis. |
+| **Bound Alignment**| `align A2:B2 right` \| `align row 3 left` | Aligns text properties to chosen page boundary orientations. |
 | **Static Sizing** | `set font size row 3 16` | Forces the tracking grid to adopt precise font layout pixel bounds. |
-| **Dynamic Scaling** | `increase font size A1` | `decrease font size row 2` | Shifts typographic size profiles up or down on target elements. |
-| **Text Color** | `make A3 orange` | `color row 3 blue` | Alters foreground font color channels across coordinates. |
-| **Cell Fills** | `fill row 2 with red` | `fill A4 pink` | Injects vibrant background colors directly behind text arrays.
-
- |
+| **Dynamic Scaling**| `increase font size A1` \| `decrease font size row 2` | Shifts typographic size profiles up or down on target elements. |
+| **Text Color** | `make A3 orange` \| `color row 3 blue` | Alters foreground font color channels across coordinates. |
+| **Cell Fills** | `fill row 2 with red` \| `fill A4 pink` | Injects vibrant background colors directly behind text arrays[cite: 11]. |
 
 ### 6. Interface Controls, Layout Sorting & Sheet Filters
-
 | Target Operation | Example Spoken Voice Command | Functional Description |
-| --- | --- | --- |
-| **Freeze Header** | `freeze header` | Locks row 1 securely in place above scrolling document vectors.
-
- |
+| :--- | :--- | :--- |
+| **Freeze Header** | `freeze header` | Locks row 1 securely in place above scrolling document vectors[cite: 5]. |
 | **Freeze Panes** | `freeze panes` | Locks workspace windows dynamically at active coordinate positions. |
-| **Unfreeze Global** | `unfreeze panes` | `unfreeze` | Returns the viewport layout back to default scrolling operations.
-
- |
+| **Unfreeze Global**| `unfreeze panes` \| `unfreeze` | Returns the viewport layout back to default scrolling operations[cite: 5]. |
 | **Merge Blocks** | `merge cells A1:C1` | Fuses separated grid systems into a singular shared interface element. |
-| **Unmerge Blocks** | `unmerge cells A1:C1` | Splits merged layouts back into individual independent coordinates. |
+| **Unmerge Blocks**| `unmerge cells A1:C1` | Splits merged layouts back into individual independent coordinates. |
 | **Column Widths** | `set column width A 5` | Modifies spatial column lines to fit strict sizing metrics. |
 | **Auto Fit Width** | `auto fit all columns` | Scans text strings to wrap column width structures perfectly with zero data overflow. |
 | **Find & Replace** | `replace Tom with John` | Executes search sweeps to overwrite string matches sheet-wide. |
-| **Data Sorting** | `sort by B ascending` | `sort by A descending` | Sorts row rows sequentially based on chosen column data trends. |
-| **Create Worksheet** | `create sheet Report` | Injects an entirely new sheet page layer tab into the working session. |
+| **Data Sorting** | `sort by B ascending` \| `sort by A descending` | Sorts rows sequentially based on chosen column data trends. |
+| **Create Worksheet**| `create sheet Report` | Injects an entirely new sheet page layer tab into the working session. |
 | **Rename Sheet** | `rename sheet Sales to Market` | Switches target sheet reference titles to keep datasets clearly organized. |
 | **Switch Context** | `switch to Buy` | Points the active backend pipeline tools to a completely different sub-sheet tab. |
 | **Drop Worksheet** | `delete sheet Report` | Destroys specified sub-sheet structures permanently from the file tree. |
 | **Apply Filter** | `filter column B = 90` | Conceals rows that fail to match designated criteria parameters. |
 | **Flush Filters** | `clear filter` | Flushes structural filter locks to reveal hidden data matrices. |
-| **Revert Change** | `undo` | Pops the last state snapshot from the rolling deque to instantly undo mistakes.
-
- |
+| **Revert Change** | `undo` | Pops the last state snapshot from the rolling deque to instantly undo mistakes[cite: 2, 5]. |
 
 ---
 
 ## 🔒 Key Design Decisions & Core Safeguards
 
 | Concern | Operational Solution | Technical Implementation |
-| --- | --- | --- |
-| **Offline Isolation** | Local processing infrastructure fallback.
-
- | Integrates `faster-whisper` and local `Ollama` (`qwen2.5-coder:3b`) models.
-
- |
-| **High-Speed Execution** | Dynamic backend processing bypass environment flags.
-
- | Flips the parsing order to run `Groq Cloud API` first via `GROQ_FIRST=true`.
-
- |
-| **Malformed LLM Output** | Structural extraction validation engines.
-
- | `RobustJsonExtractor` running 4 fallback strategies to bypass unstructured text.
-
- |
-| **Prompt Injection** | String-level security boundary monitors.
-
- | `pipeline_sanitizer.py` brackets and sanitizes in-memory historical text strings.
-
- |
-| **Formula Injection** | Strict data mutation sanitization gates.
-
- | Validates cell boundaries, appending `tab-char` escapes before raw symbols (`=`, `+`, `-`, `@`).
-
- |
-| **Destructive Actions** | Automated validation confirmation gates.
-
- | Intercepts structural mutations via `Planner`; `Agent` blocks until `confirmed=True`.
-
- |
-| **State Failures & Rollbacks** | High-performance file checkpoint management.
-
- | Automatic pre-execution disk snapshots cached inside a bounded in-memory `deque` matrix.
-
- |
-| **Data Synchronization** | Atomic data transactions on disk.
-
- | File outputs are modified using isolated temporary file structures (`tempfile` ➔ `os.replace`).
-
- |
-| **Internal Data Exposure** | Natural-language mapping abstractions.
-
- | Domain-aware `ErrorHandler` classifies trace exceptions into clear natural voice alerts.
-
- |
-| **LLM Fail Cascades** | Temporal circuit-breaking runtime controls.
-
- | Implements an automated cooling threshold (3 consecutive failures blocks processing for 60s).
-
- |
-| **Audio Thread Freezes** | Decoupled background workers.
-
- | Runs text-to-speech processing on a custom `pyttsx3` daemon thread fed by thread-safe queues.
-
- |
-| **Schema Validation** | Strict structured schema data enforcement.
-
- | Validates type coercions and fields via a formalized `Pydantic v2` data parser layer.
-
- |
+| :--- | :--- | :--- |
+| **Offline Isolation** | Local processing infrastructure fallback[cite: 2, 5]. | Integrates `faster-whisper` and local `Ollama` (`qwen2.5-coder:3b`) models[cite: 2, 5]. |
+| **High-Speed Execution** | Dynamic backend processing bypass environment flags[cite: 2, 5]. | Flips the parsing order to run `Groq Cloud API` first via `GROQ_FIRST=true`[cite: 2, 5]. |
+| **Malformed LLM Output** | Structural extraction validation engines. | `RobustJsonExtractor` running 4 fallback strategies to bypass unstructured text. |
+| **Prompt Injection** | String-level security boundary monitors. | `pipeline_sanitizer.py` brackets and sanitizes in-memory historical text strings. |
+| **Formula Injection** | Strict data mutation sanitization gates. | Validates cell boundaries, appending `tab-char` escapes before raw symbols (`=`, `+`, `-`, `@`). |
+| **Destructive Actions** | Automated validation confirmation gates. | Intercepts structural mutations via `Planner`; `Agent` blocks until `confirmed=True`. |
+| **State Failures & Rollbacks**| High-performance file checkpoint management. | Automatic pre-execution disk snapshots cached inside a bounded in-memory `deque` matrix. |
+| **Data Synchronization** | Atomic data transactions on disk. | File outputs are modified using isolated temporary file structures (`tempfile` ➔ `os.replace`). |
+| **Internal Data Exposure** | Natural-language mapping abstractions[cite: 2]. | Domain-aware `ErrorHandler` classifies trace exceptions into clear natural voice alerts[cite: 2]. |
+| **LLM Fail Cascades** | Temporal circuit-breaking runtime controls[cite: 2]. | Implements an automated cooling threshold (3 consecutive failures blocks processing for 60s)[cite: 2]. |
+| **Audio Thread Freezes** | Decoupled background workers[cite: 2]. | Runs text-to-speech processing on a custom `pyttsx3` daemon thread fed by thread-safe queues[cite: 2]. |
+| **Schema Validation** | Strict structured schema data enforcement[cite: 2]. | Validates type coercions and fields via a formalized `Pydantic v2` data parser layer[cite: 2]. |
 
 ---
 
