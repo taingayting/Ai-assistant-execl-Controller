@@ -1,110 +1,19 @@
 # Sara — Voice-Driven Enterprise Excel Automation Agent
 
-Sara is an intelligent, voice-controlled workflow assistant engineered to automate complex Microsoft Excel operations and structured data transformations using natural language. Built with an enterprise-grade hybrid instruction-parsing pipeline, Sara bridges the gap between flexible human speech and deterministic system controls—guaranteeing absolute execution safety, memory persistence, and anti-hallucination runtime guards during data mutations.
+Sara is a voice-driven assistant for Microsoft Excel that turns spoken commands into safe spreadsheet actions. The project combines speech recognition, intent parsing, workflow routing, and workbook automation into a system that can create, edit, and inspect Excel files without relying on manual input.
 
 ---
+## Why this project stands out
 
-## 🏗️ System Architecture & Request Pipeline
-
-Sara is decoupled cleanly across a **Workflow-Agent-Tools (WAT)** design pattern, operating either as a client-server desktop system or an offline-first headless listener.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              INTERFACE LAYERS                               │
-│  ┌───────────────────────────────┐     ┌─────────────────────────────────┐  │
-│  │   Desktop UI (sara_ui.py)     │     │     Web Frontend (HTML5)        │  │
-│  │   • PyQt6 Floating Panel      │     │     • Browser-based Mic/Audio   │  │
-│  │   • Native Mic Stream Capture │     │     • REST Preview & Dashboard  │  │
-│  └───────────────┬───────────────┘     └─────────────────┬───────────────┘  │
-└──────────────────┼───────────────────────────────────────┼──────────────────┘
-                   │ raw audio / text commands             │
-                   ▼                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            FLASK API BACKEND                                │
-│                                (app.py)                                     │
-│                                                                             │
-│  GET / ➔ Serves Web UI  |  POST /api/parse ➔ Intent Classification           │
-│  POST /api/execute ➔ Action Engine  |  POST /api/upload-audio ➔ STT Pipe    │
-└───────────────────────────────────┬─────────────────────────────────────────┘
-                                    │ 
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                     CORE COGNITIVE & PROCESSING PIPELINE                    │
-│                                                                             │
-│  1. SPEECH-TO-TEXT LAYER (speech_recognition.py)                             │
-│     ➔ Primary: faster-whisper (Local Engine) with Speech Context Biasing    │
-│     ➔ Fallback: Google Cloud Speech-to-Text / Cloud API Providers           │
-│                                                                             │
-│  2. SANITIZATION BOUNDARY (pipeline_sanitizer.py)                           │
-│     ➔ Prompt Injection Shielding & Formula-Injection Neutralization         │
-│                                                                             │
-│  3. TRIPLE-TIER LLM ROUTER (llm_router.py / llm_parser.py)                  │
-│     ➔ Tier 1: Heuristic Engine (30+ Regex Rules, 0ms Latency Fast-Path)     │
-│     ➔ Tier 2: Local Ollama (qwen2.5-coder:3b / DeepSeek Context Aware)      │
-│     ➔ Tier 3: Groq Cloud API API Gateway (Llama-3 High-Throughput Fallback) │
-│     ➔ Validation: Pydantic v2 Type-Enforcement & RobustJsonExtractor        │
-│                                                                             │
-│  4. ORCHESTRATION & PLANNING (agent.py / planner.py)                        │
-│     ➔ State Enrichment (memory.py SQLite Context & multi-turn Deque history)│
-│     ➔ Precondition Auditing & Validation via workflow_router.py            │
-│     ➔ Confirmation Gate Interceptor for High-Risk Destructive Actions      │
-│                                                                             │
-│  5. WORKFLOW MUTATION ENGINE (workflow_engine.py)                           │
-│     ➔ Compiles declarative YAML execution sequences into transactional steps │
-└───────────────────────────────────┬─────────────────────────────────────────┘
-                                    │ Verified Action Payload
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    DETERMINISTIC WORKSPACE EXECUTION                        │
-│                          (excel_controller.py)                              │
-│                                                                             │
-│  • openpyxl & Windows COM Integration  • Active Header Tracking Matrix      │
-│  • Bounded Rolling Undo Queue Stack    • Atomic Persistence (Temp ➔ Replace) │
-└───────────────────────────────────┬─────────────────────────────────────────┘
-                                    │ Response Meta & Output Voice Strings
-                                    ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        DAEMON TEXT-TO-SPEECH (TTS)                          │
-│                               (tts_engine.py)                               │
-│                                                                             │
-│  • Thread-Safe Asynchronous pyttsx3 Loop fed by decoupled worker Queues     │
-└───────────────────────────────────┬─────────────────────────────────────────┘
-
-```
-
+- It uses a hybrid approach: deterministic parsing handles common commands quickly, while LLM-based routing is available for more natural or ambiguous requests.
+- It is designed with execution safety in mind. Destructive actions can be confirmed, and rollback snapshots are maintained for undo support.
+- It supports two runtime modes: a desktop UI and a headless voice loop for local use.
+- It can operate locally first, with speech recognition and local LLM routing available without depending entirely on cloud services.
 ---
 
-## 🚀 Dual Runtime Execution Modes
+## What Sara can do
 
-Sara adapts dynamically to your workspace needs, offering two distinct execution paths:
-
-### 1. Unified Desktop Environment (Default GUI Mode)
-
-Triggered via `start_sara.bat` or `start_sara.pyw`. This script initializes the decoupled systems simultaneously:
-
-* **The Backend Container (`app.py`):** Spins up the core Flask API on `port 5000` to serve endpoints, handle context parsing, manage transaction states, and log runtime analytics.
-
-
-* **The Native Viewport (`sara_ui.py`):** A lightweight, borderless, floating **PyQt6 desktop interface** that captures microphone inputs, relays audio frames via REST payloads, renders execution JSON, and manages sheet data actions.
-
-
-
-### 2. Headless Runtime Loop (Ambient Native Mode)
-
-Triggered directly via `python backend/run_sara.py`. This mode bypasses graphical processing entirely to run an ambient background daemon:
-
-* Integrates an interactive `openwakeword` loop continuously listening for the system wake phrase (**"Hey Jarvis"**).
-
-
-* Upon activation, it opens a microphone capture window, pipes audio data through `faster-whisper`, maps intents via the `llm_router.py` cascade, modifies target files via `excel_controller.py`, and vocalizes direct summaries using the isolated `tts_engine.py` background thread.
-
-
-
----
-
-## 📋 Interactive Command Cheat Sheet
-
-The parsing pipeline natively supports natural language flexibilities across these primary syntax targets. Commands can be directly spoken into the interface or issued via client endpoints.
+  The parsing pipeline natively supports natural language flexibilities across these primary syntax targets. Commands can be directly spoken into the interface or issued via client endpoints.
 
 ### 1. File & Workbook Management
 | Target Operation | Example Spoken Voice Command | Functional Description |
@@ -175,6 +84,150 @@ The parsing pipeline natively supports natural language flexibilities across the
 
 ---
 
+
+## 🏗️ System Architecture & Request Pipeline
+
+  Sara is organized into layered components that transform natural voice commands into safe, deterministic Excel operations.
+```
+                              ┌───────────────────────────────────────────────────────────────────────────┐
+                              │                     🎤 User Voice Command                                |
+                              └───────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                              ┌────────────────────────────────────────────────────────────────────────────┐
+                              │              Speech Interaction Layer                                      │
+                              │                                                                            │
+                              │  • Wake Word Detection                                                     │
+                              │  • Faster-Whisper Speech-to-Text (STT)                                     │
+                              └────────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                              ┌────────────────────────────────────────────────────────────────────────────┐
+                              │             Command Understanding Layer                                    │
+                              │                                                                            │
+                              │  • Command Preprocessing & Normalization                                   │
+                              │  • Rule-Based Parser + LLM-Assisted Parser                                 │
+                              └────────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                              ┌────────────────────────────────────────────────────────────────────────────┐
+                              │         WAT Intelligent Execution Architecture                             │
+                              │                                                                            │
+                              │  • Sara Agent                                                              │
+                              │  • Planner                                                                 │
+                              │  • Router                                                                  │
+                              │  • Validator                                                               │
+                              └────────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                              ┌────────────────────────────────────────────────────────────────────────────┐
+                              │                 Workflow Execution Layer                                   │
+                              │                                                                            │
+                              │  • File Operations                                                         │
+                              │  • Data Operations                                                         │
+                              │  • Formula Operations                                                      │
+                              │  • Formatting Operations                                                   │
+                              └────────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                              ┌────────────────────────────────────────────────────────────────────────────┐
+                              │                     Tool Execution Layer                                   │
+                              │                                                                            │
+                              │  • Tool Registry                                                           │
+                              │  • Excel Tools                                                             │
+                              └────────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                              ┌────────────────────────────────────────────────────────────────────────────┐
+                              │               Excel Control & Feedback Layer                               │
+                              │                                                                            │
+                              │  • Excel Controller                                                        │
+                              │  • openpyxl + COM Automation                                               │
+                              │  • Microsoft Excel                                                         │
+                              │  • Popup UI                                                                │
+                              │  • Text-to-Speech (TTS) Feedback                                           │
+                              └────────────────────────────────────────────────────────────────────────────┘
+                                                                │
+                                                                ▼
+                              
+                                                    ✅ Excel Updated & User Feedback
+```                                                                                                                                                          
+### Speech Interaction Layer
+
+  Captures voice input through the microphone, detects the wake word, and converts spoken language into text using Faster-Whisper.
+
+### Command Understanding Layer
+
+  Normalizes speech recognition output and interprets user intent using a hybrid parsing strategy that combines deterministic rule-based parsing with LLM-assisted parsing.
+
+### WAT Intelligent Execution Architecture
+
+  The core reasoning layer of Sara.
+
+The Agent coordinates the request, the Planner generates executable actions, the Router selects the appropriate execution path, and the Validator verifies that every action is safe before execution.
+
+### Workflow Execution Layer
+
+  Transforms validated intents into structured workflows responsible for workbook management, data editing, formula generation, formatting, sorting, filtering, and other Excel operations.
+
+### Tool Execution Layer
+
+  Maps workflow steps to specialized execution tools through a centralized Tool Registry, keeping the system modular and extensible.
+
+### Excel Control & Feedback Layer
+
+  Executes workbook operations using openpyxl and Microsoft Excel COM Automation, then provides visual feedback through the desktop interface and spoken feedback through the Text-to-Speech engine.
+
+
+---
+## Core implementation areas
+
+- backend/app.py: Flask API endpoints for parsing and execution, plus confirmation handling and request logging.
+- backend/agent.py: central orchestrator that coordinates parsing, routing, planning, and execution.
+- backend/llm_router.py: hybrid routing layer that tries heuristic parsing first, then local Ollama, and finally Groq as a fallback path.
+- backend/speech_recognition.py: audio normalization and transcription, with faster-whisper and Google Speech-to-Text fallback support.
+- backend/excel_controller.py: workbook editing logic, atomic save behavior, and undo snapshots.
+- backend/run_sara.py and backend/assistant_runtime.py: headless runtime for wake-word-driven voice interaction.
+- desktop/sara_ui.py and frontend/: desktop and web UI options for interacting with the assistant.
+- workflows/: declarative workflow definitions used to structure actions.
+
+## 🚀 Dual Runtime Execution Modes
+
+  Sara adapts dynamically to your workspace needs, offering two distinct execution paths:
+
+### 1. Unified Desktop Environment (Default GUI Mode)
+
+  Triggered via `start_sara.bat` or `start_sara.pyw`. This script initializes the decoupled systems simultaneously:
+
+* **The Backend Container (`app.py`):** Spins up the core Flask API on `port 5000` to serve endpoints, handle context parsing, manage transaction states, and log runtime analytics.
+
+
+* **The Native Viewport (`sara_ui.py`):** A lightweight, borderless, floating **PyQt6 desktop interface** that captures microphone inputs, relays audio frames via REST payloads, renders execution JSON, and manages sheet data actions.
+
+
+
+### 2. Headless Runtime Loop (Ambient Native Mode)
+
+  Triggered directly via `python backend/run_sara.py`. This mode bypasses graphical processing entirely to run an ambient background daemon:
+
+* Integrates an interactive `openwakeword` loop continuously listening for the system wake phrase (**"Hey Jarvis"**).
+
+
+* Upon activation, it opens a microphone capture window, pipes audio data through `faster-whisper`, maps intents via the `llm_router.py` cascade, modifies target files via `excel_controller.py`, and vocalizes direct summaries using the isolated `tts_engine.py` background thread.
+
+
+
+---
+
+
+---
+
 ## 🔒 Key Design Decisions & Core Safeguards
 
 | Concern | Operational Solution | Technical Implementation |
@@ -221,12 +274,6 @@ Ai-assistant-excel-Controller/
 │   └── workflow_engine.py     # Dynamic declarative YAML layout instruction interpreter[cite: 2]
 ├── desktop/                   # Client view abstractions[cite: 5]
 │   └── sara_ui.py             # Borderless floating PyQt6 audio record and response display panel[cite: 5]
-├── frontend/                  # Web companion alternative interface
-│   ├── index.html             # HTML5 layout providing alternate microphone controls
-│   ├── script.js              # Client endpoint communications handler
-│   └── style.css              # Frontend visual interface styles
-├── workflows/                 # Markdown/YAML Declarative Step Blueprints[cite: 2]
-├── files/                     # Sandbox environment containing active generated spreadsheet outputs[cite: 5]
 ├── start_sara.bat             # Single-click unified system launcher script[cite: 5]
 └── README.md                  # Main documentation file[cite: 2]
 
@@ -274,8 +321,6 @@ WAKE_THRESHOLD=0.38          # Configures input target listening decibel thresho
 
 
 * **Headless Boot (Ambient Mode):** Run `python backend/run_sara.py` within an activated virtual environment terminal to track instructions purely via hotkeys and vocal indicators.
-
-
 
 
 
