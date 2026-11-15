@@ -202,6 +202,10 @@ workflows/               Step-by-step recipes for bigger tasks
 start_sara.bat           One-click start
 ```
 
+## More details
+
+My first, longer technical README is here: **[README_DETAILED.md](README_DETAILED.md)**. It has the full architecture diagram, every design decision and every command.
+
 ## Demo videos
 
 https://github.com/user-attachments/assets/9d777456-4fde-45dc-a015-4c22385d1d13
